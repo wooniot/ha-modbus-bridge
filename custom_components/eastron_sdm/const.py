@@ -68,6 +68,14 @@ SUBENTRY_TYPE_METER = "meter"
 # --- Polling -------------------------------------------------------------
 DEFAULT_SCAN_INTERVAL = 30  # seconds
 
+# Hard upper bound on how long a single register read may take before we
+# give up and force the whole gateway connection to be rebuilt. tmodbus
+# has its own ~10s per-request timeout; this sits comfortably above it so
+# a normal slow-but-recovering read is handled by tmodbus itself, and we
+# only step in when a read hangs past the point where the connection is
+# clearly wedged (observed after several hours of continuous polling).
+MODBUS_READ_TIMEOUT = 15  # seconds
+
 # Eastron devices (per the official Modbus protocol docs for both the
 # SDM230 and SDM630) refuse a single transaction that spans more than
 # 40 parameters (=80 16-bit registers). We stay comfortably under that

@@ -1,6 +1,7 @@
 """DataUpdateCoordinator for a single Eastron SDM meter (config subentry)."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import timedelta
 from typing import Callable
@@ -19,6 +20,7 @@ from .const import (
     DOMAIN,
     MAX_REGISTER_GAP,
     MAX_REGISTERS_PER_READ,
+    MODBUS_READ_TIMEOUT,
 )
 from .modbus_client import GatewayHandle
 from .registers import REGISTER_MAP, ReadBlock, RegisterDefinition, build_read_blocks, decode_float32
@@ -47,7 +49,11 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
         self.gateway = gateway
         self.unit_id: int = subentry.data[CONF_UNIT_ID]
         self.model: str = subentry.data[CONF_MODEL]
-        self.client = gateway.client_for(self.unit_id)
+        # NB: we deliberately do NOT cache a per-meter client here.
+        # After a forced gateway reconnect the cached clients are
+        # replaced, so every poll fetches its client fresh via
+        # ``self.gateway.client_for()`` - that way a reconnect triggered
+        # by one meter is instantly picked up by all others on the bus.
         # Full register map - sensor.py creates one entity per register
         # from this list so a disabled entity can always be re-enabled
         # later. Only the *polled* set (self.blocks, below) is filtered.
@@ -141,12 +147,47 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
         # Serialise all traffic for this gateway: RS485 is half-duplex,
         # and other meters on the same bus share this lock too.
         async with self.gateway.lock:
+            # Fetch the client fresh each poll (see __init__): after a
+            # reconnect this returns a client bound to the new
+            # connection.
+            client = self.gateway.client_for(self.unit_id)
             for block in self.blocks:
                 try:
-                    raw = await self.client.read_input_registers(
-                        start_address=block.start_address, quantity=block.quantity
+                    # tmodbus has its own ~10s per-request timeout; this
+                    # outer guard sits above it and catches the case
+                    # where a request hangs entirely (wedged gateway).
+                    async with asyncio.timeout(MODBUS_READ_TIMEOUT):
+                        raw = await client.read_input_registers(
+                            start_address=block.start_address, quantity=block.quantity
+                        )
+                except asyncio.TimeoutError as err:
+                    # The read hung past tmodbus' own timeout: the gateway
+                    # is wedged. Force the shared connection to be rebuilt
+                    # for every meter on this bus. We still hold the lock,
+                    # so no other request is in flight during the swap.
+                    # This poll fails; the next poll of any meter cleanly
+                    # picks up the fresh connection.
+                    _LOGGER.warning(
+                        "Read of registers %s-%s from unit %s timed out "
+                        "after %ss - reconnecting gateway",
+                        block.start_address,
+                        block.start_address + block.quantity,
+                        self.unit_id,
+                        MODBUS_READ_TIMEOUT,
                     )
+                    try:
+                        await self.gateway.reconnect()
+                    except Exception:  # noqa: BLE001
+                        _LOGGER.exception("Gateway reconnect failed")
+                    raise UpdateFailed(
+                        f"Read of registers {block.start_address}-"
+                        f"{block.start_address + block.quantity} from unit "
+                        f"{self.unit_id} timed out after {MODBUS_READ_TIMEOUT}s"
+                    ) from err
                 except Exception as err:  # noqa: BLE001
+                    # A protocol/decode-level error (e.g. an Eastron
+                    # exception response) - surface it without tearing
+                    # down the whole bus, exactly as before.
                     raise UpdateFailed(
                         f"Failed reading registers {block.start_address}-"
                         f"{block.start_address + block.quantity} from unit "

@@ -62,6 +62,7 @@ class GatewayHandle:
 
     base_client: Any
     lock: asyncio.Lock
+    data: dict[str, Any]
     refcount: int = 0
     _unit_clients: dict[int, Any] = None  # type: ignore[assignment]
 
@@ -75,6 +76,38 @@ class GatewayHandle:
             client = self.base_client.for_unit_id(unit_id)
             self._unit_clients[unit_id] = client
         return client
+
+    async def reconnect(self) -> None:
+        """Force-close the underlying gateway connection and build a
+        fresh one.
+
+        RS485 gateways (especially cheap RS485<->TCP bridges) can wedge
+        after hours of continuous polling: the socket stays "open" but
+        no reply ever comes back, so every meter behind it starts
+        timing out. Tearing the connection down and rebuilding it fixes
+        all meters on the bus at once, without a HA restart.
+
+        Callers MUST hold ``self.lock`` while calling this (it is the
+        same lock that serialises every request over this gateway), so
+        no request is in flight against the old client while we swap it
+        out. The cached per-unit clients are cleared as well: each
+        meter fetches its client fresh via ``client_for()`` on its next
+        poll and so transparently picks up the new connection.
+        """
+        _LOGGER.warning(
+            "Eastron SDM gateway %s appears wedged - forcing reconnect",
+            gateway_key(self.data),
+        )
+        try:
+            await self.base_client.__aexit__(None, None, None)
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("Error closing wedged gateway connection", exc_info=True)
+        # Drop stale per-unit clients before building the new base
+        # client so no meter can keep talking to the dead connection.
+        self._unit_clients.clear()
+        self.base_client = await _create_base_client(self.data)
+        await self.base_client.__aenter__()
+        _LOGGER.info("Eastron SDM gateway %s reconnected", gateway_key(self.data))
 
 
 async def _create_base_client(data: dict[str, Any]):
@@ -137,7 +170,7 @@ async def async_get_gateway(hass: HomeAssistant, data: dict[str, Any]) -> Gatewa
         _LOGGER.debug("Opening new Eastron SDM gateway connection: %s", key)
         base_client = await _create_base_client(data)
         await base_client.__aenter__()
-        handle = GatewayHandle(base_client=base_client, lock=asyncio.Lock())
+        handle = GatewayHandle(base_client=base_client, lock=asyncio.Lock(), data=data)
         gateways[key] = handle
     handle.refcount += 1
     return handle
