@@ -1,0 +1,12 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Digital Strom Modbus",
+        "description": "Verbind met de Modbus-gateway (TCP).",
+        "data": { "host": "Host / IP", "port": "Poort", "unit": "Unit-ID (slave)" }
+      }
+    },
+    "abort": { "already_configured": "Dit apparaat is al geconfigureerd." }
+  }
+}
