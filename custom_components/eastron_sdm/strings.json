@@ -1,0 +1,107 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Eastron SDM gateway",
+        "description": "How is this RS485 bus reachable from Home Assistant? You'll add the individual meters on this bus next.",
+        "data": {
+          "connection_type": "Connection type"
+        }
+      },
+      "network": {
+        "title": "Gateway connection",
+        "description": "IP address/hostname and port of the RS485-to-network gateway.",
+        "data": {
+          "host": "Host or IP address",
+          "tcp_port": "Port",
+          "wait_between_requests_ms": "Pause between requests (ms)"
+        },
+        "data_description": {
+          "wait_between_requests_ms": "Minimum silence between two Modbus requests on this bus. Raise this if you see timeouts or garbled reads; 0 disables the pause."
+        }
+      },
+      "serial": {
+        "title": "Serial connection",
+        "description": "The local serial device for your USB-RS485 adapter, and the serial settings configured on the meter(s) (Eastron default is usually 9600-N-1).",
+        "data": {
+          "port": "Serial port",
+          "baudrate": "Baud rate",
+          "parity": "Parity (N/E/O)",
+          "stopbits": "Stop bits",
+          "bytesize": "Byte size",
+          "wait_between_requests_ms": "Pause between requests (ms)"
+        },
+        "data_description": {
+          "wait_between_requests_ms": "Minimum silence between two Modbus requests on this bus. Raise this if you see timeouts or garbled reads; 0 disables the pause."
+        }
+      },
+      "meter": {
+        "title": "Add a meter",
+        "description": "One meter on this RS485 bus.",
+        "data": {
+          "name": "Name",
+          "model": "Meter model",
+          "unit_id": "Modbus address (unit ID / slave ID)",
+          "scan_interval": "Polling interval (seconds)"
+        },
+        "data_description": {
+          "scan_interval": "Recommended: leave this at the default (30s) for normal monitoring and dashboards. Only lower it if you're feeding a zero-export or load-balancing controller that needs fresh readings every 3-5 seconds - and keep in mind this meter shares its RS485 bus with any other meters behind the same gateway, so speeding up one meter adds traffic for all of them. Going much below 3 seconds is not recommended."
+        }
+      },
+      "add_another": {
+        "title": "Add another meter?",
+        "description": "{count} meter(s) added so far. Add another meter on this same bus, or finish setup.",
+        "menu_options": {
+          "meter": "Add another meter",
+          "finish": "Finish setup"
+        }
+      }
+    },
+    "error": {
+      "duplicate_unit_id": "That Modbus address is already used by another meter on this bus."
+    },
+    "abort": {
+      "already_configured": "This gateway (same connection settings) has already been added."
+    }
+  },
+  "config_subentries": {
+    "meter": {
+      "title": "Meter",
+      "initiate_flow": {
+        "user": "Add meter",
+        "reconfigure": "Reconfigure meter"
+      },
+      "entry_type": "Meter",
+      "step": {
+        "user": {
+          "title": "Add a meter",
+          "description": "One meter on this gateway's RS485 bus.",
+          "data": {
+            "name": "Name",
+            "model": "Meter model",
+            "unit_id": "Modbus address (unit ID / slave ID)",
+            "scan_interval": "Polling interval (seconds)"
+          },
+          "data_description": {
+            "scan_interval": "Recommended: leave this at the default (30s) for normal monitoring and dashboards. Only lower it if you're feeding a zero-export or load-balancing controller that needs fresh readings every 3-5 seconds - and keep in mind this meter shares its RS485 bus with any other meters behind the same gateway, so speeding up one meter adds traffic for all of them. Going much below 3 seconds is not recommended."
+          }
+        },
+        "reconfigure": {
+          "title": "Reconfigure meter",
+          "data": {
+            "name": "Name",
+            "model": "Meter model",
+            "unit_id": "Modbus address (unit ID / slave ID)",
+            "scan_interval": "Polling interval (seconds)"
+          },
+          "data_description": {
+            "scan_interval": "Recommended: leave this at the default (30s) for normal monitoring and dashboards. Only lower it if you're feeding a zero-export or load-balancing controller that needs fresh readings every 3-5 seconds - and keep in mind this meter shares its RS485 bus with any other meters behind the same gateway, so speeding up one meter adds traffic for all of them. Going much below 3 seconds is not recommended."
+          }
+        }
+      },
+      "error": {
+        "duplicate_unit_id": "That Modbus address is already used by another meter on this bus."
+      }
+    }
+  }
+}

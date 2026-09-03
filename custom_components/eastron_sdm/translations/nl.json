@@ -1,0 +1,107 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Eastron SDM gateway",
+        "description": "Hoe is deze RS485-bus vanuit Home Assistant bereikbaar? De losse meters op deze bus voeg je hierna toe.",
+        "data": {
+          "connection_type": "Verbindingstype"
+        }
+      },
+      "network": {
+        "title": "Gateway-verbinding",
+        "description": "IP-adres/hostnaam en poort van de RS485-naar-netwerk gateway.",
+        "data": {
+          "host": "Host of IP-adres",
+          "tcp_port": "Poort",
+          "wait_between_requests_ms": "Pauze tussen requests (ms)"
+        },
+        "data_description": {
+          "wait_between_requests_ms": "Minimale stilte tussen twee Modbus-requests op deze bus. Verhoog dit bij timeouts of onbetrouwbare uitlezingen; 0 schakelt de pauze uit."
+        }
+      },
+      "serial": {
+        "title": "Seriële verbinding",
+        "description": "Het lokale seriële apparaat van je USB-RS485 adapter, en de seriële instellingen zoals geconfigureerd op de meter(s) (Eastron-standaard is meestal 9600-N-1).",
+        "data": {
+          "port": "Seriële poort",
+          "baudrate": "Baudrate",
+          "parity": "Pariteit (N/E/O)",
+          "stopbits": "Stopbits",
+          "bytesize": "Byte-grootte",
+          "wait_between_requests_ms": "Pauze tussen requests (ms)"
+        },
+        "data_description": {
+          "wait_between_requests_ms": "Minimale stilte tussen twee Modbus-requests op deze bus. Verhoog dit bij timeouts of onbetrouwbare uitlezingen; 0 schakelt de pauze uit."
+        }
+      },
+      "meter": {
+        "title": "Meter toevoegen",
+        "description": "Eén meter op deze RS485-bus.",
+        "data": {
+          "name": "Naam",
+          "model": "Metertype",
+          "unit_id": "Modbus-adres (unit ID / slave ID)",
+          "scan_interval": "Poll-interval (seconden)"
+        },
+        "data_description": {
+          "scan_interval": "Aanbevolen: laat dit op de standaardwaarde (30s) staan voor normale monitoring en dashboards. Verlaag dit alleen als je een zero-export- of load-balancing-regelaar voedt die elke 3 tot 5 seconden verse data nodig heeft - en bedenk dat deze meter dezelfde RS485-bus deelt met andere meters achter dezelfde gateway, dus een snellere meter betekent meer verkeer voor iedereen op die bus. Ga niet veel onder de 3 seconden, dat wordt afgeraden."
+        }
+      },
+      "add_another": {
+        "title": "Nog een meter toevoegen?",
+        "description": "Tot nu toe {count} meter(s) toegevoegd. Voeg nog een meter toe op dezelfde bus, of rond de installatie af.",
+        "menu_options": {
+          "meter": "Nog een meter toevoegen",
+          "finish": "Installatie afronden"
+        }
+      }
+    },
+    "error": {
+      "duplicate_unit_id": "Dat Modbus-adres wordt al gebruikt door een andere meter op deze bus."
+    },
+    "abort": {
+      "already_configured": "Deze gateway (dezelfde verbindingsinstellingen) is al toegevoegd."
+    }
+  },
+  "config_subentries": {
+    "meter": {
+      "title": "Meter",
+      "initiate_flow": {
+        "user": "Meter toevoegen",
+        "reconfigure": "Meter herconfigureren"
+      },
+      "entry_type": "Meter",
+      "step": {
+        "user": {
+          "title": "Meter toevoegen",
+          "description": "Eén meter op de RS485-bus van deze gateway.",
+          "data": {
+            "name": "Naam",
+            "model": "Metertype",
+            "unit_id": "Modbus-adres (unit ID / slave ID)",
+            "scan_interval": "Poll-interval (seconden)"
+          },
+          "data_description": {
+            "scan_interval": "Aanbevolen: laat dit op de standaardwaarde (30s) staan voor normale monitoring en dashboards. Verlaag dit alleen als je een zero-export- of load-balancing-regelaar voedt die elke 3 tot 5 seconden verse data nodig heeft - en bedenk dat deze meter dezelfde RS485-bus deelt met andere meters achter dezelfde gateway, dus een snellere meter betekent meer verkeer voor iedereen op die bus. Ga niet veel onder de 3 seconden, dat wordt afgeraden."
+          }
+        },
+        "reconfigure": {
+          "title": "Meter herconfigureren",
+          "data": {
+            "name": "Naam",
+            "model": "Metertype",
+            "unit_id": "Modbus-adres (unit ID / slave ID)",
+            "scan_interval": "Poll-interval (seconden)"
+          },
+          "data_description": {
+            "scan_interval": "Aanbevolen: laat dit op de standaardwaarde (30s) staan voor normale monitoring en dashboards. Verlaag dit alleen als je een zero-export- of load-balancing-regelaar voedt die elke 3 tot 5 seconden verse data nodig heeft - en bedenk dat deze meter dezelfde RS485-bus deelt met andere meters achter dezelfde gateway, dus een snellere meter betekent meer verkeer voor iedereen op die bus. Ga niet veel onder de 3 seconden, dat wordt afgeraden."
+          }
+        }
+      },
+      "error": {
+        "duplicate_unit_id": "Dat Modbus-adres wordt al gebruikt door een andere meter op deze bus."
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "name": "Modbus Bridge",
-  "homeassistant": "2024.1.0",
+  "name": "Eastron SDM Energy Meters",
+  "homeassistant": "2026.1.0",
   "render_readme": true
 }
