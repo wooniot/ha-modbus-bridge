@@ -1,5 +1,5 @@
-"""Constants for the Digital Strom Modbus integration."""
-DOMAIN = "digitalstrom_modbus"
+"""Constants for the Modbus Bridge integration."""
+DOMAIN = "modbus_bridge"
 
 CONF_HOST = "host"
 CONF_PORT = "port"

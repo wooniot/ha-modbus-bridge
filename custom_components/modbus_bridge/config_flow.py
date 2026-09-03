@@ -1,4 +1,4 @@
-"""Config flow for Digital Strom Modbus."""
+"""Config flow for Modbus Bridge."""
 from __future__ import annotations
 
 from typing import Any
@@ -10,8 +10,8 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from .const import CONF_HOST, CONF_PORT, CONF_UNIT, DEFAULT_PORT, DEFAULT_UNIT, DOMAIN
 
 
-class DigitalStromModbusConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Digital Strom Modbus."""
+class ModbusBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Modbus Bridge."""
 
     VERSION = 1
 

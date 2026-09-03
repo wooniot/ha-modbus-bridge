@@ -1,16 +1,16 @@
 {
-  "domain": "digitalstrom_modbus",
-  "name": "Digital Strom Modbus",
+  "domain": "modbus_bridge",
+  "name": "Modbus Bridge",
   "codeowners": [
     "@wooniot",
     "@rvdgaag"
   ],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/wooniot/ha-digitalstrom-modbus",
+  "documentation": "https://github.com/wooniot/ha-modbus-bridge",
   "integration_type": "hub",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/wooniot/ha-digitalstrom-modbus/issues",
+  "issue_tracker": "https://github.com/wooniot/ha-modbus-bridge/issues",
   "requirements": [
     "pymodbus>=3.5.0"
   ],

@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Digital Strom Modbus",
+        "title": "Modbus Bridge",
         "description": "Verbind met de Modbus-gateway (TCP).",
         "data": { "host": "Host / IP", "port": "Poort", "unit": "Unit-ID (slave)" }
       }

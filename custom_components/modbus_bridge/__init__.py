@@ -1,6 +1,6 @@
-"""Digital Strom Modbus — HA custom integration (skeleton).
+"""Modbus Bridge — HA custom integration (skeleton).
 
-Modbus-gebaseerde koppeling voor Digital Strom / gerelateerde Modbus-apparatuur.
+Modbus TCP bridge voor Home Assistant (apparatuur/gateways).
 Opzet: config entry met host/poort/unit; platforms worden hier geladen zodra
 de entiteiten zijn uitgewerkt (samen met René).
 """
@@ -15,7 +15,7 @@ PLATFORMS: list[str] = []  # bv. ["climate", "switch", "sensor"] zodra uitgewerk
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Digital Strom Modbus from a config entry."""
+    """Set up Modbus Bridge from a config entry."""
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = dict(entry.data)
     if PLATFORMS:
