@@ -97,12 +97,18 @@ def _meter_schema(defaults: dict[str, Any]) -> vol.Schema:
             vol.Required(
                 CONF_MODEL, default=defaults.get(CONF_MODEL, MODEL_SDM630)
             ): _model_selector(),
+            # NumberSelector always returns a float (e.g. 1.0), even with
+            # step=1; coerce to int so the value stored in the config entry
+            # is a plain int. A float unit_id reaches tmodbus' struct.pack
+            # and fails the Modbus read with "required argument is not an
+            # integer" (coordinator.py also repairs older float entries
+            # defensively).
             vol.Required(
                 CONF_UNIT_ID, default=defaults.get(CONF_UNIT_ID, 1)
-            ): _unit_id_selector(),
+            ): vol.All(_unit_id_selector(), vol.Coerce(int)),
             vol.Optional(
                 CONF_SCAN_INTERVAL, default=defaults.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-            ): _scan_interval_selector(),
+            ): vol.All(_scan_interval_selector(), vol.Coerce(int)),
         }
     )
 

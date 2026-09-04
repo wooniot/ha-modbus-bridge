@@ -48,7 +48,15 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
         self.entry = entry
         self.subentry = subentry
         self.gateway = gateway
-        self.unit_id: int = subentry.data[CONF_UNIT_ID]
+        # HA's NumberSelector always hands back a float (e.g. 1.0), even
+        # with step=1, so a unit_id coming from the config flow is stored
+        # as a float. tmodbus packs the unit id straight into the Modbus
+        # frame with struct.pack(">...B", ...), which rejects a float with
+        # "required argument is not an integer" - so coerce to int here.
+        # Doing it in the coordinator (not only in the config flow) also
+        # repairs meters that were already stored with a float unit_id,
+        # without the user having to remove and re-add them.
+        self.unit_id: int = int(subentry.data[CONF_UNIT_ID])
         self.model: str = subentry.data[CONF_MODEL]
         # Not cached on self: fetched fresh from the gateway on every
         # poll (see _async_update_data) so that a reconnect triggered
@@ -65,7 +73,9 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
         )
         self._registry_unsub: Callable[[], None] | None = None
 
-        scan_interval = subentry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        # Also float-from-NumberSelector; timedelta tolerates a float, but
+        # keep it an int for tidy logs and consistency with unit_id above.
+        scan_interval = int(subentry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
 
         super().__init__(
             hass,

@@ -13,5 +13,5 @@
   "requirements": [
     "tmodbus==0.6.2"
   ],
-  "version": "1.0.4b1"
+  "version": "1.0.5b1"
 }
