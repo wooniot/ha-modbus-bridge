@@ -58,7 +58,9 @@ DEFAULT_WAIT_BETWEEN_REQUESTS_SERIAL = 30
 # --- Meter models ------------------------------------------------------
 MODEL_SDM230 = "sdm230"
 MODEL_SDM630 = "sdm630"
-MODELS = [MODEL_SDM230, MODEL_SDM630]
+MODEL_SDM120 = "sdm120"
+MODEL_SDM72V2 = "sdm72v2"
+MODELS = [MODEL_SDM230, MODEL_SDM630, MODEL_SDM120, MODEL_SDM72V2]
 
 # --- Subentries ------------------------------------------------------
 # Each physical meter on the bus is a subentry of type "meter" under

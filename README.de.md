@@ -2,11 +2,11 @@
 
 [English](README.md) | [Nederlands](README.nl.md) | **Deutsch**
 
-> Home-Assistant-Custom-Integration für Eastron-SDM230/SDM630-Energiezähler über Modbus (TCP, RTU-over-TCP oder lokal seriell), mit Abfrageintervallen pro Zähler für Dashboards oder schnelle Nulleinspeisungs-/Lastausgleichs-Anwendungen.
+> Home-Assistant-Custom-Integration für Eastron-SDM230/SDM630/SDM120/SDM72Modbus-V2-Energiezähler über Modbus (TCP, RTU-over-TCP oder lokal seriell), mit Abfrageintervallen pro Zähler für Dashboards oder schnelle Nulleinspeisungs-/Lastausgleichs-Anwendungen.
 
 ## Was sie tut
 
-Dies ist eine Custom-Integration für Home Assistant für Eastron-SDM230- (einphasig) und SDM630- (dreiphasig) Modbus-Energiezähler. Sie kommuniziert mit Ihrem/Ihren Zähler(n) über das Modbus-Protokoll und stellt jeden Messwert als nativen Home-Assistant-Sensor bereit - Spannung, Strom, Wirk-/Schein-/Blindleistung, Leistungsfaktor, Frequenz, Import-/Exportenergie, THD%, Demand-Werte und mehr - mit der richtigen Device-Class, Einheit und Unterstützung für Langzeitstatistiken von Haus aus.
+Dies ist eine Custom-Integration für Home Assistant für Eastron-SDM230- (einphasig), SDM630- (dreiphasig), SDM120- (einphasig, kompakt) und SDM72Modbus-V2- (dreiphasig, kompakt) Modbus-Energiezähler. Sie kommuniziert mit Ihrem/Ihren Zähler(n) über das Modbus-Protokoll und stellt jeden Messwert als nativen Home-Assistant-Sensor bereit - Spannung, Strom, Wirk-/Schein-/Blindleistung, Leistungsfaktor, Frequenz, Import-/Exportenergie, THD%, Demand-Werte und mehr - mit der richtigen Device-Class, Einheit und Unterstützung für Langzeitstatistiken von Haus aus.
 
 ## Was sie bietet
 
@@ -21,7 +21,7 @@ Dies ist eine Custom-Integration für Home Assistant für Eastron-SDM230- (einph
 
 ---
 
-Eine Custom-Integration für Home Assistant, um mehrere Eastron-SDM230- (einphasig) und/oder SDM630- (dreiphasig) Modbus-Energiezähler direkt über RS485 auszulesen, ohne Cloud-Abhängigkeit. Aufgebaut auf [tmodbus](https://github.com/wlcrs/tmodbus), derselben modernen, asynchronen Modbus-Bibliothek, die auch Home Assistants eigene "Modernizing Modbus"-Architektur (Release 2026.9) verwendet. Registeradressen und Datentypen stammen direkt aus den offiziellen Eastron-Modbus-Protokolldokumenten (SDM230Modbus V1.4, SDM630Modbus V1.8).
+Eine Custom-Integration für Home Assistant, um mehrere Eastron-SDM230- (einphasig) und/oder SDM630- (dreiphasig) Modbus-Energiezähler direkt über RS485 auszulesen, ohne Cloud-Abhängigkeit. Aufgebaut auf [tmodbus](https://github.com/wlcrs/tmodbus), derselben modernen, asynchronen Modbus-Bibliothek, die auch Home Assistants eigene "Modernizing Modbus"-Architektur (Release 2026.9) verwendet. Registeradressen und Datentypen stammen direkt aus den offiziellen Eastron-Modbus-Protokolldokumenten (SDM230Modbus V1.4, SDM630Modbus V1.8, SDM120-Modbus-Protokoll, SDM72DM-V2-Benutzerhandbuch V1.1). Die Registerkarten für SDM120 und SDM72Modbus-V2 wurden noch nicht an echter Hardware getestet - bitte melden, falls eine Abweichung auffällt.
 
 ## Was dies tut/nicht tut
 
@@ -49,7 +49,7 @@ Eine Custom-Integration für Home Assistant, um mehrere Eastron-SDM230- (einphas
 
 Bei beiden Varianten finden Sie hier auch **"Pause zwischen Anfragen (ms)"** - eine minimale Stille, die nach jeder Modbus-Antwort eingefügt wird, bevor die nächste Anfrage gesendet wird. Standard 30ms für serielle/RTU-over-TCP-Verbindungen und 20ms für ein natives Modbus-TCP-Gateway. `tmodbus` selbst verwendet standardmäßig 0ms; manche günstigen RS485-Gateways brauchen nach einer Antwort einen Moment und reagieren ohne Pause mit Timeouts oder fehlerhaften Messwerten. Sehen Sie dieses Verhalten, erhöhen Sie diesen Wert (z. B. 50-100ms); bei einem stabilen Bus können Sie ihn dagegen verringern für schnelleres Abfragen. Eine Anpassung ist nachträglich über **Rekonfigurieren** möglich, ohne die Zähler zu verlieren.
 
-**Schritt 3 - erster Zähler.** Name, Modell (SDM230 oder SDM630) und die Modbus-Adresse (Unit ID / Slave ID, 1-247 - jeder Zähler am Bus muss eine eindeutige Adresse haben).
+**Schritt 3 - erster Zähler.** Name, Modell (SDM230, SDM630, SDM120 oder SDM72Modbus V2) und die Modbus-Adresse (Unit ID / Slave ID, 1-247 - jeder Zähler am Bus muss eine eindeutige Adresse haben).
 
 **Schritt 4 - weiterer Zähler oder abschließen.** Nach jedem Zähler erhalten Sie die Auswahl "Weiteren Zähler hinzufügen" oder "Einrichtung abschließen".
 

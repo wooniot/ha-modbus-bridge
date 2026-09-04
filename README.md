@@ -2,11 +2,11 @@
 
 **English** | [Nederlands](README.nl.md) | [Deutsch](README.de.md)
 
-> Home Assistant custom integration for Eastron SDM230/SDM630 energy meters over Modbus (TCP, RTU-over-TCP, or local serial), with per-meter polling intervals for dashboards or fast zero-export/load-balancing use.
+> Home Assistant custom integration for Eastron SDM230/SDM630/SDM120/SDM72Modbus-V2 energy meters over Modbus (TCP, RTU-over-TCP, or local serial), with per-meter polling intervals for dashboards or fast zero-export/load-balancing use.
 
 ## What it does
 
-This is a custom Home Assistant integration for Eastron SDM230 (single-phase) and SDM630 (three-phase) Modbus energy meters. It talks to your meter(s) over the Modbus protocol and exposes every reading as a native Home Assistant sensor - voltage, current, active/apparent/reactive power, power factor, frequency, import/export energy, THD%, demand values, and more - with the right device class, unit and long-term statistics support out of the box.
+This is a custom Home Assistant integration for Eastron SDM230 (single-phase), SDM630 (three-phase), SDM120 (single-phase, compact) and SDM72Modbus V2 (three-phase, compact) Modbus energy meters. It talks to your meter(s) over the Modbus protocol and exposes every reading as a native Home Assistant sensor - voltage, current, active/apparent/reactive power, power factor, frequency, import/export energy, THD%, demand values, and more - with the right device class, unit and long-term statistics support out of the box.
 
 ## What it offers
 
@@ -21,7 +21,7 @@ This is a custom Home Assistant integration for Eastron SDM230 (single-phase) an
 
 ---
 
-A custom Home Assistant integration to read multiple Eastron SDM230 (single-phase) and/or SDM630 (three-phase) Modbus energy meters directly over RS485, with no cloud dependency. Built on [tmodbus](https://github.com/wlcrs/tmodbus), the same modern, async Modbus library used by Home Assistant's own "Modernizing Modbus" architecture (release 2026.9). Register addresses and data types come directly from the official Eastron Modbus protocol documents (SDM230Modbus V1.4, SDM630Modbus V1.8).
+A custom Home Assistant integration to read multiple Eastron SDM230 (single-phase) and/or SDM630 (three-phase) Modbus energy meters directly over RS485, with no cloud dependency. Built on [tmodbus](https://github.com/wlcrs/tmodbus), the same modern, async Modbus library used by Home Assistant's own "Modernizing Modbus" architecture (release 2026.9). Register addresses and data types come directly from the official Eastron Modbus protocol documents (SDM230Modbus V1.4, SDM630Modbus V1.8, SDM120-Modbus protocol, SDM72DM-V2 user manual V1.1). The SDM120 and SDM72Modbus-V2 register maps have not yet been tested against real hardware - please report back if you spot a mismatch.
 
 ## What this does and does not do
 
@@ -49,7 +49,7 @@ A custom Home Assistant integration to read multiple Eastron SDM230 (single-phas
 
 In both variants you'll also find **"Pause between requests (ms)"** here - a minimum period of silence inserted after each Modbus response before the next request is sent. Default 30ms for serial/RTU-over-TCP connections and 20ms for a native Modbus TCP gateway. `tmodbus` itself defaults to 0ms; some cheap RS485 gateways need a moment after a response and, without a pause, react with timeouts or corrupt readings. If you see that behaviour, raise this value (e.g. 50-100ms); on a stable bus you can instead lower it for faster polling. It can be changed afterwards via **Reconfigure** without losing the meters.
 
-**Step 3 - first meter.** Name, model (SDM230 or SDM630), and the Modbus address (unit ID / slave ID, 1-247 - every meter on the bus must have a unique address).
+**Step 3 - first meter.** Name, model (SDM230, SDM630, SDM120 or SDM72Modbus V2), and the Modbus address (unit ID / slave ID, 1-247 - every meter on the bus must have a unique address).
 
 **Step 4 - another meter, or finish.** After each meter you get the choice "Add another meter" or "Finish setup".
 

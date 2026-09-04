@@ -48,8 +48,10 @@ from .const import (
     DEFAULT_WAIT_BETWEEN_REQUESTS_NETWORK,
     DEFAULT_WAIT_BETWEEN_REQUESTS_SERIAL,
     DOMAIN,
+    MODEL_SDM120,
     MODEL_SDM230,
     MODEL_SDM630,
+    MODEL_SDM72V2,
     PARITY_OPTIONS,
     SUBENTRY_TYPE_METER,
 )
@@ -64,6 +66,8 @@ CONNECTION_TYPE_LABELS = {
 MODEL_LABELS = {
     MODEL_SDM230: "Eastron SDM230 (1-fase)",
     MODEL_SDM630: "Eastron SDM630 (3-fase)",
+    MODEL_SDM120: "Eastron SDM120 (1-fase, compact)",
+    MODEL_SDM72V2: "Eastron SDM72Modbus V2 (3-fase, compact)",
 }
 
 

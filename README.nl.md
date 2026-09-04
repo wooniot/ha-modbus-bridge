@@ -2,11 +2,11 @@
 
 [English](README.md) | **Nederlands** | [Deutsch](README.de.md)
 
-> Home Assistant custom integration voor Eastron SDM230/SDM630 energiemeters via Modbus (TCP, RTU-over-TCP of lokaal serieel), met een per-meter instelbaar poll-interval voor dashboards of snelle zero-export/load-balancing toepassingen.
+> Home Assistant custom integration voor Eastron SDM230/SDM630/SDM120/SDM72Modbus-V2 energiemeters via Modbus (TCP, RTU-over-TCP of lokaal serieel), met een per-meter instelbaar poll-interval voor dashboards of snelle zero-export/load-balancing toepassingen.
 
 ## Wat dit doet
 
-Dit is een custom Home Assistant-integratie voor Eastron **SDM230** (1-fase) en **SDM630** (3-fase) Modbus-energiemeters. Het praat via het Modbus-protocol met je meter(s) en zet elke uitlezing om in een native Home Assistant-sensor - spanning, stroom, actief/schijnbaar/reactief vermogen, power factor, frequentie, import/export-energie, THD%, demand-waarden en meer - meteen met de juiste device class, eenheid en ondersteuning voor langetermijnstatistieken.
+Dit is een custom Home Assistant-integratie voor Eastron **SDM230** (1-fase), **SDM630** (3-fase), **SDM120** (1-fase, compact) en **SDM72Modbus V2** (3-fase, compact) Modbus-energiemeters. Het praat via het Modbus-protocol met je meter(s) en zet elke uitlezing om in een native Home Assistant-sensor - spanning, stroom, actief/schijnbaar/reactief vermogen, power factor, frequentie, import/export-energie, THD%, demand-waarden en meer - meteen met de juiste device class, eenheid en ondersteuning voor langetermijnstatistieken.
 
 ## Wat dit biedt
 
@@ -21,7 +21,7 @@ Dit is een custom Home Assistant-integratie voor Eastron **SDM230** (1-fase) en 
 
 ---
 
-Gebouwd op [tmodbus](https://github.com/wlcrs/tmodbus), dezelfde moderne, async Modbus-bibliotheek die Home Assistant's eigen "Modernizing Modbus"-architectuur (release 2026.9) gebruikt. Registeradressen en datatypes komen rechtstreeks uit de officiële Eastron Modbus-protocoldocumenten (SDM230Modbus V1.4, SDM630Modbus V1.8).
+Gebouwd op [tmodbus](https://github.com/wlcrs/tmodbus), dezelfde moderne, async Modbus-bibliotheek die Home Assistant's eigen "Modernizing Modbus"-architectuur (release 2026.9) gebruikt. Registeradressen en datatypes komen rechtstreeks uit de officiële Eastron Modbus-protocoldocumenten (SDM230Modbus V1.4, SDM630Modbus V1.8, SDM120-Modbus protocol, SDM72DM-V2 user manual V1.1). De registerkaarten voor de SDM120 en SDM72Modbus-V2 zijn nog niet tegen echte hardware getest — laat het weten als je een afwijking tegenkomt.
 
 ## Wat dit wel/niet doet
 
@@ -49,7 +49,7 @@ Gebouwd op [tmodbus](https://github.com/wlcrs/tmodbus), dezelfde moderne, async 
 
 Bij beide varianten vind je hier ook **"Pauze tussen requests (ms)"** — een minimale stilte die na elk Modbus-antwoord wordt ingelast voor de volgende request wordt verstuurd. Standaard 30ms voor seriële/RTU-over-TCP verbindingen en 20ms voor een native Modbus TCP-gateway. `tmodbus` zelf gebruikt standaard 0ms; sommige goedkope RS485-gateways hebben na een antwoord even tijd nodig en reageren zonder pauze met timeouts of corrupte uitlezingen. Zie je dat gedrag, zet deze waarde dan hoger (bijv. 50-100ms); bij een stabiele bus kun je 'm juist verlagen voor snellere polling. Aanpassen kan achteraf via **Herconfigureren** zonder de meters kwijt te raken.
 
-**Stap 3 — eerste meter.** Naam, model (SDM230 of SDM630), en het Modbus-adres (unit ID / slave ID, 1-247 — elke meter op de bus moet een uniek adres hebben).
+**Stap 3 — eerste meter.** Naam, model (SDM230, SDM630, SDM120 of SDM72Modbus V2), en het Modbus-adres (unit ID / slave ID, 1-247 — elke meter op de bus moet een uniek adres hebben).
 
 **Stap 4 — nog een meter, of afronden.** Na elke meter krijg je de keuze "Nog een meter toevoegen" of "Installatie afronden". Zo voeg je in één doorlopende wizard alle meters op deze bus toe.
 
