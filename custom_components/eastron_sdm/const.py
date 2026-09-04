@@ -109,12 +109,15 @@ SUBENTRY_TYPE_METER = "meter"
 # --- Polling -------------------------------------------------------------
 DEFAULT_SCAN_INTERVAL = 30  # seconds
 
-# Hard upper bound on how long a single register read may take before we
-# give up and force the whole gateway connection to be rebuilt. tmodbus
-# has its own ~10s per-request timeout; this sits comfortably above it so
-# a normal slow-but-recovering read is handled by tmodbus itself, and we
-# only step in when a read hangs past the point where the connection is
-# clearly wedged (observed after several hours of continuous polling).
+# Watchdog timeout for a single Modbus read (register block), in
+# seconds. tmodbus applies its own ~10s per-transaction timeout
+# internally, so this is set comfortably above that - it exists to
+# catch a *stuck* shared connection (the TCP socket to the gateway
+# going quietly stale after hours of uptime, with no error, just ever
+# slower responses) rather than a normal single slow/lost response.
+# When a read blows through this, the gateway connection is assumed
+# unrecoverable and is force-closed and reopened - see
+# GatewayHandle.recreate() in modbus_client.py.
 MODBUS_READ_TIMEOUT = 15  # seconds
 
 # Eastron devices (per the official Modbus protocol docs for both the

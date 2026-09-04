@@ -50,11 +50,12 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
         self.gateway = gateway
         self.unit_id: int = subentry.data[CONF_UNIT_ID]
         self.model: str = subentry.data[CONF_MODEL]
-        # NB: we deliberately do NOT cache a per-meter client here.
-        # After a forced gateway reconnect the cached clients are
-        # replaced, so every poll fetches its client fresh via
-        # ``self.gateway.client_for()`` - that way a reconnect triggered
-        # by one meter is instantly picked up by all others on the bus.
+        # Not cached on self: fetched fresh from the gateway on every
+        # poll (see _async_update_data) so that a reconnect triggered
+        # by *any* meter on this bus - not just this one - is picked
+        # up immediately, instead of this coordinator being left
+        # holding a client bound to a connection that's already been
+        # replaced.
         # Full register map - sensor.py creates one entity per register
         # from this list so a disabled entity can always be re-enabled
         # later. Only the *polled* set (self.blocks, below) is filtered.
@@ -148,9 +149,9 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
         # Serialise all traffic for this gateway: RS485 is half-duplex,
         # and other meters on the same bus share this lock too.
         async with self.gateway.lock:
-            # Fetch the client fresh each poll (see __init__): after a
-            # reconnect this returns a client bound to the new
-            # connection.
+            # Fetched fresh (not cached on self) so a reconnect done by
+            # another meter's coordinator earlier in this poll cycle -
+            # or by this one, below - is always picked up.
             client = self.gateway.client_for(self.unit_id)
             # Almost every supported model exposes its measurements as
             # Modbus *input* registers (function 04h); a few (e.g. the
@@ -163,41 +164,26 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
             )
             for block in self.blocks:
                 try:
-                    # tmodbus has its own ~10s per-request timeout; this
-                    # outer guard sits above it and catches the case
-                    # where a request hangs entirely (wedged gateway).
-                    async with asyncio.timeout(MODBUS_READ_TIMEOUT):
-                        raw = await read(
-                            start_address=block.start_address, quantity=block.quantity
-                        )
-                except asyncio.TimeoutError as err:
-                    # The read hung past tmodbus' own timeout: the gateway
-                    # is wedged. Force the shared connection to be rebuilt
-                    # for every meter on this bus. We still hold the lock,
-                    # so no other request is in flight during the swap.
-                    # This poll fails; the next poll of any meter cleanly
-                    # picks up the fresh connection.
-                    _LOGGER.warning(
-                        "Read of registers %s-%s from unit %s timed out "
-                        "after %ss - reconnecting gateway",
-                        block.start_address,
-                        block.start_address + block.quantity,
-                        self.unit_id,
-                        MODBUS_READ_TIMEOUT,
+                    raw = await asyncio.wait_for(
+                        read(start_address=block.start_address, quantity=block.quantity),
+                        timeout=MODBUS_READ_TIMEOUT,
                     )
-                    try:
-                        await self.gateway.reconnect()
-                    except Exception:  # noqa: BLE001
-                        _LOGGER.exception("Gateway reconnect failed")
+                except TimeoutError as err:
+                    # A single read has no business taking this long -
+                    # the shared connection is presumed stuck. Force a
+                    # reconnect (while still holding the lock, so no
+                    # other meter on this bus races us) and fail *this*
+                    # poll cleanly; the next scheduled poll - for this
+                    # meter or any other on the same gateway - gets a
+                    # fresh connection to try again.
+                    await self.gateway.recreate()
                     raise UpdateFailed(
-                        f"Read of registers {block.start_address}-"
-                        f"{block.start_address + block.quantity} from unit "
-                        f"{self.unit_id} timed out after {MODBUS_READ_TIMEOUT}s"
+                        f"Timed out after {MODBUS_READ_TIMEOUT}s reading registers "
+                        f"{block.start_address}-{block.start_address + block.quantity} from "
+                        f"unit {self.unit_id}; the gateway connection was reset and will be "
+                        "retried on the next poll"
                     ) from err
                 except Exception as err:  # noqa: BLE001
-                    # A protocol/decode-level error (e.g. an Eastron
-                    # exception response) - surface it without tearing
-                    # down the whole bus, exactly as before.
                     raise UpdateFailed(
                         f"Failed reading registers {block.start_address}-"
                         f"{block.start_address + block.quantity} from unit "

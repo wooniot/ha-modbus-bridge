@@ -20,7 +20,9 @@ from homeassistant.config_entries import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers.selector import (
-    SelectOptionDict,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -48,46 +50,43 @@ from .const import (
     DEFAULT_WAIT_BETWEEN_REQUESTS_NETWORK,
     DEFAULT_WAIT_BETWEEN_REQUESTS_SERIAL,
     DOMAIN,
-    MODEL_DTSU666,
-    MODEL_EM540,
-    MODEL_ET112,
-    MODEL_ET340,
-    MODEL_SDM120,
-    MODEL_SDM230,
     MODEL_SDM630,
-    MODEL_SDM72V2,
+    MODELS,
     PARITY_OPTIONS,
     SUBENTRY_TYPE_METER,
 )
 from .modbus_client import gateway_key
 
-CONNECTION_TYPE_LABELS = {
-    CONNECTION_RTU_OVER_TCP: "RS485-naar-TCP gateway, transparant (bv. Elfin EW11, USR-W610/TCP232)",
-    CONNECTION_TCP: "Modbus TCP gateway, native (bv. Waveshare RS485-to-ETH in Modbus TCP-modus)",
-    CONNECTION_SERIAL: "Lokale seriële poort (USB-RS485 adapter direct op de HA-host)",
-}
-
-MODEL_LABELS = {
-    MODEL_SDM230: "Eastron SDM230 (1-fase)",
-    MODEL_SDM630: "Eastron SDM630 (3-fase)",
-    MODEL_SDM120: "Eastron SDM120 (1-fase, compact)",
-    MODEL_SDM72V2: "Eastron SDM72Modbus V2 (3-fase, compact)",
-    MODEL_ET112: "Victron ET112 (1-fase)",
-    MODEL_ET340: "Victron ET340 (3-fase)",
-    MODEL_EM540: "Victron EM540 (3-fase)",
-    MODEL_DTSU666: "Chint DTSU666 (3-fase)",
-}
+# Option labels for both selectors below live in strings.json/translations
+# (under "selector") via translation_key, not as literal strings here, so
+# they follow the user's Home Assistant language instead of always
+# showing up in whatever language they were first written in.
+CONNECTION_TYPE_OPTIONS = [CONNECTION_RTU_OVER_TCP, CONNECTION_TCP, CONNECTION_SERIAL]
 
 
-def _model_selector(default: str) -> SelectSelector:
+def _model_selector() -> SelectSelector:
     return SelectSelector(
         SelectSelectorConfig(
-            options=[
-                SelectOptionDict(value=value, label=label)
-                for value, label in MODEL_LABELS.items()
-            ],
+            options=MODELS,
             mode=SelectSelectorMode.LIST,
+            translation_key="model",
         )
+    )
+
+
+def _unit_id_selector() -> NumberSelector:
+    # Box mode (a text field with +/- steppers) rather than a slider:
+    # a slider makes it fiddly to land on a precise address, especially
+    # on a phone, so it should look and behave just like the polling
+    # interval field below.
+    return NumberSelector(
+        NumberSelectorConfig(min=1, max=247, step=1, mode=NumberSelectorMode.BOX)
+    )
+
+
+def _scan_interval_selector() -> NumberSelector:
+    return NumberSelector(
+        NumberSelectorConfig(min=1, max=3600, step=1, mode=NumberSelectorMode.BOX)
     )
 
 
@@ -97,13 +96,13 @@ def _meter_schema(defaults: dict[str, Any]) -> vol.Schema:
             vol.Required("name", default=defaults.get("name", "Eastron meter")): str,
             vol.Required(
                 CONF_MODEL, default=defaults.get(CONF_MODEL, MODEL_SDM630)
-            ): _model_selector(defaults.get(CONF_MODEL, MODEL_SDM630)),
+            ): _model_selector(),
             vol.Required(
                 CONF_UNIT_ID, default=defaults.get(CONF_UNIT_ID, 1)
-            ): vol.All(vol.Coerce(int), vol.Range(min=1, max=247)),
+            ): _unit_id_selector(),
             vol.Optional(
                 CONF_SCAN_INTERVAL, default=defaults.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-            ): vol.All(vol.Coerce(int), vol.Range(min=1, max=3600)),
+            ): _scan_interval_selector(),
         }
     )
 
@@ -141,11 +140,9 @@ class EastronSdmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_CONNECTION_TYPE, default=CONNECTION_RTU_OVER_TCP
                 ): SelectSelector(
                     SelectSelectorConfig(
-                        options=[
-                            SelectOptionDict(value=value, label=label)
-                            for value, label in CONNECTION_TYPE_LABELS.items()
-                        ],
+                        options=CONNECTION_TYPE_OPTIONS,
                         mode=SelectSelectorMode.LIST,
+                        translation_key=CONF_CONNECTION_TYPE,
                     )
                 ),
             }

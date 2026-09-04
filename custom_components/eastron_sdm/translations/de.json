@@ -64,6 +64,27 @@
       "already_configured": "Dieses Gateway (mit denselben Verbindungseinstellungen) wurde bereits hinzugefügt."
     }
   },
+  "selector": {
+    "connection_type": {
+      "options": {
+        "rtu_over_tcp": "RS485-zu-TCP-Gateway, transparent (z. B. Elfin EW11, USR-W610/TCP232)",
+        "tcp": "Modbus-TCP-Gateway, nativ (z. B. Waveshare RS485-zu-ETH im Modbus-TCP-Modus)",
+        "serial": "Lokaler serieller Port (USB-RS485-Adapter direkt am HA-Host)"
+      }
+    },
+    "model": {
+      "options": {
+        "sdm230": "Eastron SDM230 (einphasig)",
+        "sdm630": "Eastron SDM630 (dreiphasig)",
+        "sdm120": "Eastron SDM120 (einphasig, kompakt)",
+        "sdm72v2": "Eastron SDM72Modbus V2 (dreiphasig, kompakt)",
+        "et112": "Victron ET112 (einphasig)",
+        "et340": "Victron ET340 (dreiphasig)",
+        "em540": "Victron EM540 (dreiphasig)",
+        "dtsu666": "Chint DTSU666 (dreiphasig)"
+      }
+    }
+  },
   "config_subentries": {
     "meter": {
       "title": "Zähler",

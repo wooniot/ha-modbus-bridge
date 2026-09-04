@@ -64,6 +64,27 @@
       "already_configured": "Deze gateway (dezelfde verbindingsinstellingen) is al toegevoegd."
     }
   },
+  "selector": {
+    "connection_type": {
+      "options": {
+        "rtu_over_tcp": "RS485-naar-TCP gateway, transparant (bv. Elfin EW11, USR-W610/TCP232)",
+        "tcp": "Modbus TCP gateway, native (bv. Waveshare RS485-to-ETH in Modbus TCP-modus)",
+        "serial": "Lokale seriële poort (USB-RS485 adapter direct op de HA-host)"
+      }
+    },
+    "model": {
+      "options": {
+        "sdm230": "Eastron SDM230 (1-fase)",
+        "sdm630": "Eastron SDM630 (3-fase)",
+        "sdm120": "Eastron SDM120 (1-fase, compact)",
+        "sdm72v2": "Eastron SDM72Modbus V2 (3-fase, compact)",
+        "et112": "Victron ET112 (1-fase)",
+        "et340": "Victron ET340 (3-fase)",
+        "em540": "Victron EM540 (3-fase)",
+        "dtsu666": "Chint DTSU666 (3-fase)"
+      }
+    }
+  },
   "config_subentries": {
     "meter": {
       "title": "Meter",
