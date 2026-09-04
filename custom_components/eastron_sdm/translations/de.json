@@ -1,0 +1,107 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Eastron SDM Gateway",
+        "description": "Wie ist dieser RS485-Bus von Home Assistant aus erreichbar? Die einzelnen Zähler an diesem Bus fügen Sie im nächsten Schritt hinzu.",
+        "data": {
+          "connection_type": "Verbindungstyp"
+        }
+      },
+      "network": {
+        "title": "Gateway-Verbindung",
+        "description": "IP-Adresse/Hostname und Port des RS485-zu-Netzwerk-Gateways.",
+        "data": {
+          "host": "Host oder IP-Adresse",
+          "tcp_port": "Port",
+          "wait_between_requests_ms": "Pause zwischen Anfragen (ms)"
+        },
+        "data_description": {
+          "wait_between_requests_ms": "Mindestpause zwischen zwei Modbus-Anfragen auf diesem Bus. Erhöhen Sie diesen Wert, wenn Timeouts oder fehlerhafte Messwerte auftreten; 0 deaktiviert die Pause."
+        }
+      },
+      "serial": {
+        "title": "Serielle Verbindung",
+        "description": "Das lokale serielle Gerät für Ihren USB-RS485-Adapter sowie die auf dem/den Zähler(n) konfigurierten seriellen Einstellungen (Eastron-Standard ist meist 9600-N-1).",
+        "data": {
+          "port": "Serieller Port",
+          "baudrate": "Baudrate",
+          "parity": "Parität (N/E/O)",
+          "stopbits": "Stoppbits",
+          "bytesize": "Bytegröße",
+          "wait_between_requests_ms": "Pause zwischen Anfragen (ms)"
+        },
+        "data_description": {
+          "wait_between_requests_ms": "Mindestpause zwischen zwei Modbus-Anfragen auf diesem Bus. Erhöhen Sie diesen Wert, wenn Timeouts oder fehlerhafte Messwerte auftreten; 0 deaktiviert die Pause."
+        }
+      },
+      "meter": {
+        "title": "Zähler hinzufügen",
+        "description": "Ein Zähler an diesem RS485-Bus.",
+        "data": {
+          "name": "Name",
+          "model": "Zählermodell",
+          "unit_id": "Modbus-Adresse (Unit-ID / Slave-ID)",
+          "scan_interval": "Abfrageintervall (Sekunden)"
+        },
+        "data_description": {
+          "scan_interval": "Empfohlen: Belassen Sie diesen Wert auf dem Standard (30s) für normale Überwachung und Dashboards. Senken Sie ihn nur, wenn Sie einen Nulleinspeisungs- oder Lastausgleichsregler versorgen, der alle 3-5 Sekunden frische Messwerte benötigt - und beachten Sie, dass dieser Zähler seinen RS485-Bus mit allen anderen Zählern hinter demselben Gateway teilt. Ein schnellerer Zähler erzeugt also mehr Verkehr für alle. Werte deutlich unter 3 Sekunden werden nicht empfohlen."
+        }
+      },
+      "add_another": {
+        "title": "Weiteren Zähler hinzufügen?",
+        "description": "Bisher {count} Zähler hinzugefügt. Fügen Sie einen weiteren Zähler an diesem Bus hinzu oder schließen Sie die Einrichtung ab.",
+        "menu_options": {
+          "meter": "Weiteren Zähler hinzufügen",
+          "finish": "Einrichtung abschließen"
+        }
+      }
+    },
+    "error": {
+      "duplicate_unit_id": "Diese Modbus-Adresse wird bereits von einem anderen Zähler an diesem Bus verwendet."
+    },
+    "abort": {
+      "already_configured": "Dieses Gateway (mit denselben Verbindungseinstellungen) wurde bereits hinzugefügt."
+    }
+  },
+  "config_subentries": {
+    "meter": {
+      "title": "Zähler",
+      "initiate_flow": {
+        "user": "Zähler hinzufügen",
+        "reconfigure": "Zähler neu konfigurieren"
+      },
+      "entry_type": "Zähler",
+      "step": {
+        "user": {
+          "title": "Zähler hinzufügen",
+          "description": "Ein Zähler am RS485-Bus dieses Gateways.",
+          "data": {
+            "name": "Name",
+            "model": "Zählermodell",
+            "unit_id": "Modbus-Adresse (Unit-ID / Slave-ID)",
+            "scan_interval": "Abfrageintervall (Sekunden)"
+          },
+          "data_description": {
+            "scan_interval": "Empfohlen: Belassen Sie diesen Wert auf dem Standard (30s) für normale Überwachung und Dashboards. Senken Sie ihn nur, wenn Sie einen Nulleinspeisungs- oder Lastausgleichsregler versorgen, der alle 3-5 Sekunden frische Messwerte benötigt - und beachten Sie, dass dieser Zähler seinen RS485-Bus mit allen anderen Zählern hinter demselben Gateway teilt. Ein schnellerer Zähler erzeugt also mehr Verkehr für alle. Werte deutlich unter 3 Sekunden werden nicht empfohlen."
+          }
+        },
+        "reconfigure": {
+          "title": "Zähler neu konfigurieren",
+          "data": {
+            "name": "Name",
+            "model": "Zählermodell",
+            "unit_id": "Modbus-Adresse (Unit-ID / Slave-ID)",
+            "scan_interval": "Abfrageintervall (Sekunden)"
+          },
+          "data_description": {
+            "scan_interval": "Empfohlen: Belassen Sie diesen Wert auf dem Standard (30s) für normale Überwachung und Dashboards. Senken Sie ihn nur, wenn Sie einen Nulleinspeisungs- oder Lastausgleichsregler versorgen, der alle 3-5 Sekunden frische Messwerte benötigt - und beachten Sie, dass dieser Zähler seinen RS485-Bus mit allen anderen Zählern hinter demselben Gateway teilt. Ein schnellerer Zähler erzeugt also mehr Verkehr für alle. Werte deutlich unter 3 Sekunden werden nicht empfohlen."
+          }
+        }
+      },
+      "error": {
+        "duplicate_unit_id": "Diese Modbus-Adresse wird bereits von einem anderen Zähler an diesem Bus verwendet."
+      }
+    }
+  }
+}
