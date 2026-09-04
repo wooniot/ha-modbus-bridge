@@ -8,7 +8,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, SUBENTRY_TYPE_METER
+from .const import DOMAIN, MANUFACTURERS, SUBENTRY_TYPE_METER
 from .coordinator import EastronCoordinator
 from .registers import RegisterDefinition
 
@@ -55,7 +55,7 @@ class EastronSdmSensor(CoordinatorEntity[EastronCoordinator], SensorEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, subentry.subentry_id)},
             name=subentry.title,
-            manufacturer="Eastron",
+            manufacturer=MANUFACTURERS.get(coordinator.model, "Eastron"),
             model=coordinator.model.upper(),
         )
 

@@ -48,6 +48,10 @@ from .const import (
     DEFAULT_WAIT_BETWEEN_REQUESTS_NETWORK,
     DEFAULT_WAIT_BETWEEN_REQUESTS_SERIAL,
     DOMAIN,
+    MODEL_DTSU666,
+    MODEL_EM540,
+    MODEL_ET112,
+    MODEL_ET340,
     MODEL_SDM120,
     MODEL_SDM230,
     MODEL_SDM630,
@@ -68,6 +72,10 @@ MODEL_LABELS = {
     MODEL_SDM630: "Eastron SDM630 (3-fase)",
     MODEL_SDM120: "Eastron SDM120 (1-fase, compact)",
     MODEL_SDM72V2: "Eastron SDM72Modbus V2 (3-fase, compact)",
+    MODEL_ET112: "Victron ET112 (1-fase)",
+    MODEL_ET340: "Victron ET340 (3-fase)",
+    MODEL_EM540: "Victron EM540 (3-fase)",
+    MODEL_DTSU666: "Chint DTSU666 (3-fase)",
 }
 
 

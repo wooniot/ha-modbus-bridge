@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Eastron SDM Gateway",
+        "title": "Eastron / Victron / Chint Gateway",
         "description": "Wie ist dieser RS485-Bus von Home Assistant aus erreichbar? Die einzelnen Zähler an diesem Bus fügen Sie im nächsten Schritt hinzu.",
         "data": {
           "connection_type": "Verbindungstyp"

@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Eastron SDM gateway",
+        "title": "Eastron / Victron / Chint gateway",
         "description": "Hoe is deze RS485-bus vanuit Home Assistant bereikbaar? De losse meters op deze bus voeg je hierna toe.",
         "data": {
           "connection_type": "Verbindingstype"

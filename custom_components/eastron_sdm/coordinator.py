@@ -18,12 +18,13 @@ from .const import (
     CONF_UNIT_ID,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    HOLDING_REGISTER_MODELS,
     MAX_REGISTER_GAP,
     MAX_REGISTERS_PER_READ,
     MODBUS_READ_TIMEOUT,
 )
 from .modbus_client import GatewayHandle
-from .registers import REGISTER_MAP, ReadBlock, RegisterDefinition, build_read_blocks, decode_float32
+from .registers import REGISTER_MAP, ReadBlock, RegisterDefinition, build_read_blocks, decode_register
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -151,13 +152,22 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
             # reconnect this returns a client bound to the new
             # connection.
             client = self.gateway.client_for(self.unit_id)
+            # Almost every supported model exposes its measurements as
+            # Modbus *input* registers (function 04h); a few (e.g. the
+            # Chint DTSU666) use *holding* registers (03h) instead -
+            # see HOLDING_REGISTER_MODELS.
+            read = (
+                client.read_holding_registers
+                if self.model in HOLDING_REGISTER_MODELS
+                else client.read_input_registers
+            )
             for block in self.blocks:
                 try:
                     # tmodbus has its own ~10s per-request timeout; this
                     # outer guard sits above it and catches the case
                     # where a request hangs entirely (wedged gateway).
                     async with asyncio.timeout(MODBUS_READ_TIMEOUT):
-                        raw = await client.read_input_registers(
+                        raw = await read(
                             start_address=block.start_address, quantity=block.quantity
                         )
                 except asyncio.TimeoutError as err:
@@ -197,7 +207,7 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
                 for reg in block.registers:
                     offset = reg.address - block.start_address
                     try:
-                        data[reg.key] = decode_float32(raw, offset)
+                        data[reg.key] = decode_register(raw, offset, reg)
                     except (IndexError, ValueError, OverflowError):
                         _LOGGER.debug(
                             "Could not decode register %s (offset %s) for unit %s",

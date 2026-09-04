@@ -1,12 +1,12 @@
-# Eastron SDM Energy Meters
+# Eastron / Victron / Chint Energy Meters
 
 [English](README.md) | **Nederlands** | [Deutsch](README.de.md)
 
-> Home Assistant custom integration voor Eastron SDM230/SDM630/SDM120/SDM72Modbus-V2 energiemeters via Modbus (TCP, RTU-over-TCP of lokaal serieel), met een per-meter instelbaar poll-interval voor dashboards of snelle zero-export/load-balancing toepassingen.
+> Home Assistant custom integration voor Eastron SDM230/SDM630/SDM120/SDM72Modbus-V2, Victron ET112/ET340/EM540 en Chint DTSU666 energiemeters via Modbus (TCP, RTU-over-TCP of lokaal serieel), met een per-meter instelbaar poll-interval voor dashboards of snelle zero-export/load-balancing toepassingen.
 
 ## Wat dit doet
 
-Dit is een custom Home Assistant-integratie voor Eastron **SDM230** (1-fase), **SDM630** (3-fase), **SDM120** (1-fase, compact) en **SDM72Modbus V2** (3-fase, compact) Modbus-energiemeters. Het praat via het Modbus-protocol met je meter(s) en zet elke uitlezing om in een native Home Assistant-sensor - spanning, stroom, actief/schijnbaar/reactief vermogen, power factor, frequentie, import/export-energie, THD%, demand-waarden en meer - meteen met de juiste device class, eenheid en ondersteuning voor langetermijnstatistieken.
+Dit is een custom Home Assistant-integratie voor **Eastron** SDM230/SDM630/SDM120/SDM72Modbus-V2, **Victron** ET112/ET340/EM540 en **Chint** DTSU666 Modbus-energiemeters (1- en 3-fase). Het praat via het Modbus-protocol met je meter(s) en zet elke uitlezing om in een native Home Assistant-sensor - spanning, stroom, actief/schijnbaar/reactief vermogen, power factor, frequentie, import/export-energie, THD% (Eastron), en meer - meteen met de juiste device class, eenheid en ondersteuning voor langetermijnstatistieken. Meters van verschillende merken op dezelfde bus mogen vrij gemengd worden - bijv. een Eastron SDM630 naast een Victron ET340.
 
 ## Wat dit biedt
 
@@ -21,7 +21,7 @@ Dit is een custom Home Assistant-integratie voor Eastron **SDM230** (1-fase), **
 
 ---
 
-Gebouwd op [tmodbus](https://github.com/wlcrs/tmodbus), dezelfde moderne, async Modbus-bibliotheek die Home Assistant's eigen "Modernizing Modbus"-architectuur (release 2026.9) gebruikt. Registeradressen en datatypes komen rechtstreeks uit de officiële Eastron Modbus-protocoldocumenten (SDM230Modbus V1.4, SDM630Modbus V1.8, SDM120-Modbus protocol, SDM72DM-V2 user manual V1.1). De registerkaarten voor de SDM120 en SDM72Modbus-V2 zijn nog niet tegen echte hardware getest — laat het weten als je een afwijking tegenkomt.
+Gebouwd op [tmodbus](https://github.com/wlcrs/tmodbus), dezelfde moderne, async Modbus-bibliotheek die Home Assistant's eigen "Modernizing Modbus"-architectuur (release 2026.9) gebruikt. Registeradressen en datatypes komen rechtstreeks uit de officiële protocoldocumenten van elke fabrikant: Eastron (SDM230Modbus V1.4, SDM630Modbus V1.8, SDM120-Modbus protocol, SDM72DM-V2 user manual V1.1), Carlo Gavazzi/Victron (EM111, EM330/EM340, EM530/EM540 communicatieprotocollen — de onderliggende hardware achter de Victron-modellen ET112/ET340/EM540) en Chint (DTSU666/DSSU666 user manual). Let op: Victron/Carlo Gavazzi-meters gebruiken een andere, oudere registerconventie dan Eastron — geschaalde integers in plaats van IEEE754-floats — en de Chint DTSU666 gebruikt Modbus *holding*-registers (functie 03h) in plaats van de *input*-registers (04h) die elk ander model hier gebruikt; beide worden per model automatisch afgehandeld. De registerkaarten voor SDM120, SDM72Modbus-V2, ET112, ET340, EM540 en DTSU666 zijn nog niet tegen echte hardware getest — laat het weten als je een afwijking tegenkomt.
 
 ## Wat dit wel/niet doet
 
@@ -34,7 +34,7 @@ Gebouwd op [tmodbus](https://github.com/wlcrs/tmodbus), dezelfde moderne, async 
 
 1. Kopieer de map `custom_components/eastron_sdm` naar `<jouw HA-config>/custom_components/eastron_sdm` (via Samba, SSH, of de Studio Code Server add-on). Alternatief: voeg de repo toe als "Custom repository" in HACS (categorie Integration).
 2. Herstart Home Assistant.
-3. Instellingen → Apparaten & diensten → Integratie toevoegen → zoek "Eastron SDM".
+3. Instellingen → Apparaten & diensten → Integratie toevoegen → zoek "Eastron", "Victron" of "Chint" (één integratie, genoteerd als "Eastron / Victron / Chint Energy Meters").
 4. Doorloop de flow hieronder — je configureert de gateway/RS485-bus **één keer**, en voegt daarna in dezelfde wizard net zoveel meters toe als je op die bus hebt.
 
 ## De config flow doorlopen
@@ -49,7 +49,7 @@ Gebouwd op [tmodbus](https://github.com/wlcrs/tmodbus), dezelfde moderne, async 
 
 Bij beide varianten vind je hier ook **"Pauze tussen requests (ms)"** — een minimale stilte die na elk Modbus-antwoord wordt ingelast voor de volgende request wordt verstuurd. Standaard 30ms voor seriële/RTU-over-TCP verbindingen en 20ms voor een native Modbus TCP-gateway. `tmodbus` zelf gebruikt standaard 0ms; sommige goedkope RS485-gateways hebben na een antwoord even tijd nodig en reageren zonder pauze met timeouts of corrupte uitlezingen. Zie je dat gedrag, zet deze waarde dan hoger (bijv. 50-100ms); bij een stabiele bus kun je 'm juist verlagen voor snellere polling. Aanpassen kan achteraf via **Herconfigureren** zonder de meters kwijt te raken.
 
-**Stap 3 — eerste meter.** Naam, model (SDM230, SDM630, SDM120 of SDM72Modbus V2), en het Modbus-adres (unit ID / slave ID, 1-247 — elke meter op de bus moet een uniek adres hebben).
+**Stap 3 — eerste meter.** Naam, model (Eastron SDM230/SDM630/SDM120/SDM72Modbus V2, Victron ET112/ET340/EM540, of Chint DTSU666), en het Modbus-adres (unit ID / slave ID, 1-247 — elke meter op de bus moet een uniek adres hebben).
 
 **Stap 4 — nog een meter, of afronden.** Na elke meter krijg je de keuze "Nog een meter toevoegen" of "Installatie afronden". Zo voeg je in één doorlopende wizard alle meters op deze bus toe.
 
@@ -68,6 +68,7 @@ Eén config entry = één gateway/RS485-verbinding. Elke meter op die bus is daa
 ## Bekende beperkingen / dingen om zelf te verifiëren
 
 - Deze integratie draait inmiddels live tegen echte SDM230/SDM630-meters via een RS485-naar-TCP gateway (6 meters op één bus) — getest inclusief lange-termijn stabiliteit, gedeeld-bus-doorvoer bij korte poll-intervallen, en het aan/uitzetten van entiteiten. Test bij een nieuwe installatie alsnog eerst met één meter voor je de rest toevoegt, en kijk in Instellingen → Systeem → Logboeken als er iets niet meteen werkt.
+- Alleen de Eastron SDM230 en SDM630 zijn tot dusver tegen echte hardware getest. De registerkaarten voor de SDM120, SDM72Modbus V2, Victron ET112/ET340/EM540 en Chint DTSU666 zijn nieuw en alleen gebaseerd op de protocoldocumenten van de fabrikanten, nog niet tegen echte hardware geverifieerd — precies daarom worden deze modellen **uitsluitend in beta pre-releases** meegeleverd. Controleer de eerste uitlezing tegen het display van de meter zelf voordat je erop vertrouwt voor iets geautomatiseerds (bijv. export-limitering), en meld een verkeerde waarde (met de register-/sensornaam) zodat de kaart gecorrigeerd kan worden voordat hij in een stabiele release komt.
 - `tmodbus` vereist Python 3.12+; recente Home Assistant Core-versies voldoen hieraan.
 - Sommige entiteiten (fasehoeken, THD%, per-fase demand/energie op de SDM630) staan standaard uitgeschakeld om de entiteitenlijst behapbaar te houden — zet ze aan via Instellingen → Entiteiten als je ze nodig hebt.
 - De poll-interval is per meter instelbaar (1-3600s). Aanbevolen: laat dit op de standaard (30s) voor normale monitoring. Verlaag dit alleen voor een zero-export- of load-balancing-toepassing; bedenk dat alle requests serieel via één lock lopen, dus een snellere meter betekent meer verkeer voor iedereen op die bus. Ga niet veel onder de 3 seconden.

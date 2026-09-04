@@ -1,11 +1,28 @@
-"""Eastron SDM230 / SDM630 / SDM120 / SDM72Modbus-V2 Modbus register maps.
+"""Modbus register maps for every supported meter model.
 
-Register addresses below are 0-based Modbus "input register" offsets,
-i.e. the manufacturer's documented address (e.g. "30073") minus the
-30001 base used in the Eastron Modbus protocol documents. Every
-parameter occupies two consecutive 16-bit registers and is encoded as
-a big-endian (most-significant-register-first) IEEE754 32-bit float,
-exactly like the meter's own default "Register Order" setting.
+Two unrelated encoding families are supported, distinguished by each
+``RegisterDefinition``'s ``value_type``:
+
+- **Eastron SDM230 / SDM630 / SDM120 / SDM72Modbus-V2** (default,
+  ``value_type="float32"``). Register addresses are 0-based Modbus
+  "input register" offsets, i.e. the manufacturer's documented address
+  (e.g. "30073") minus the 30001 base used in the Eastron Modbus
+  protocol documents. Every parameter occupies two consecutive 16-bit
+  registers and is encoded as a big-endian (most-significant-register-
+  first) IEEE754 32-bit float, exactly like the meter's own default
+  "Register Order" setting.
+- **Victron Energy ET112 / ET340 / EM540** (``value_type="int16"`` or
+  ``"int32"``). These are Carlo Gavazzi devices sold under a Victron
+  model name (ET112 = Carlo Gavazzi EM111, ET340 = Carlo Gavazzi
+  EM340, EM540 = Carlo Gavazzi EM530/EM540) with a completely
+  different, older Modbus convention: every parameter is a plain
+  big-endian signed integer (1 register for INT16, 2 for INT32) that
+  must be divided by that register's ``scale`` to get the physical
+  value - e.g. a raw current reading of 1234 with scale=1000 is
+  1.234 A. Register addresses below use the same 0-based-offset
+  convention as above (documented "3xxxx" input-register address minus
+  300001), which matches consistently across all three Carlo
+  Gavazzi/Victron protocol docs.
 
 Sources:
 - Eastron SDM230Modbus Protocol Implementation V1.4 (input registers
@@ -23,6 +40,23 @@ Sources:
   SDM72-V2 line does not document, plus two SDM72-specific registers
   (31281/31283, "total import/export active power") that aren't part
   of the SDM630 map.
+- Carlo Gavazzi EM111 (MV5 model) Modbus serial protocol rev. 2.12 -
+  underlying protocol for the Victron ET112.
+- Carlo Gavazzi EM330/EM340/ET330/ET340 communication protocol V2
+  rev. 17 - underlying protocol for the Victron ET340.
+- Carlo Gavazzi EM530/EM540 Modbus communication protocol V1.3
+  (13/02/2024) - underlying protocol for the Victron EM540.
+  NOTE: these three ET112/ET340/EM540 register maps have not been
+  tested against real hardware (2026-09-04) - only cross-checked for
+  internal consistency (sequential register offsets, matching layouts
+  between the three closely-related Carlo Gavazzi docs).
+- Chint DTSU666/DSSU666 User Manual (official chintglobal.com PDF).
+  Like the Eastron SDM family, its registers are plain IEEE754 float32
+  values in physical units (no integer scale factor needed) - but
+  they are Modbus *holding* registers (function 03h), not *input*
+  registers (function 04h) like every other model here; see
+  HOLDING_REGISTER_MODELS in const.py and coordinator.py. Also not
+  tested against real hardware (2026-09-04).
 """
 from __future__ import annotations
 
@@ -39,7 +73,16 @@ from homeassistant.const import (
     UnitOfPower,
 )
 
-from .const import MODEL_SDM120, MODEL_SDM230, MODEL_SDM630, MODEL_SDM72V2
+from .const import (
+    MODEL_DTSU666,
+    MODEL_EM540,
+    MODEL_ET112,
+    MODEL_ET340,
+    MODEL_SDM120,
+    MODEL_SDM230,
+    MODEL_SDM630,
+    MODEL_SDM72V2,
+)
 
 MEASUREMENT = SensorStateClass.MEASUREMENT
 TOTAL_INCREASING = SensorStateClass.TOTAL_INCREASING
@@ -48,7 +91,8 @@ TOTAL = SensorStateClass.TOTAL
 
 @dataclass(frozen=True)
 class RegisterDefinition:
-    """A single Eastron input-register parameter."""
+    """A single input-register parameter, from either supported
+    encoding family - see the module docstring for ``value_type``."""
 
     key: str
     address: int
@@ -58,67 +102,109 @@ class RegisterDefinition:
     state_class: SensorStateClass | None = None
     icon: str | None = None
     entity_registry_enabled_default: bool = True
-    # Number of 16-bit registers this parameter occupies. Every Eastron
-    # parameter is a 32-bit float, so this is always 2.
-    count: int = field(default=2, init=False)
+    # "float32" (Eastron SDM family) or "int16"/"int32" (Carlo Gavazzi /
+    # Victron family, see module docstring) - decode_register() below
+    # dispatches on this.
+    value_type: str = "float32"
+    # Only meaningful for value_type "int16"/"int32": divide the raw
+    # signed integer by this to get the physical value.
+    scale: float = 1.0
+    # Number of 16-bit registers this parameter occupies, derived from
+    # value_type in __post_init__ (float32/int32 = 2, int16 = 1).
+    count: int = field(init=False, default=0)
+
+    def __post_init__(self) -> None:
+        counts = {"float32": 2, "int16": 1, "int32": 2}
+        object.__setattr__(self, "count", counts[self.value_type])
 
 
-def _v(key: str, address: int, name: str) -> RegisterDefinition:
+def _v(
+    key: str, address: int, name: str, enabled: bool = True,
+    *, value_type: str = "float32", scale: float = 1.0,
+) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
         unit=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=MEASUREMENT,
+        entity_registry_enabled_default=enabled,
+        value_type=value_type,
+        scale=scale,
     )
 
 
-def _a(key: str, address: int, name: str, enabled: bool = True) -> RegisterDefinition:
+def _a(
+    key: str, address: int, name: str, enabled: bool = True,
+    *, value_type: str = "float32", scale: float = 1.0,
+) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
         unit=UnitOfElectricCurrent.AMPERE,
         device_class=SensorDeviceClass.CURRENT,
         state_class=MEASUREMENT,
         entity_registry_enabled_default=enabled,
+        value_type=value_type,
+        scale=scale,
     )
 
 
-def _w(key: str, address: int, name: str, enabled: bool = True) -> RegisterDefinition:
+def _w(
+    key: str, address: int, name: str, enabled: bool = True,
+    *, value_type: str = "float32", scale: float = 1.0,
+) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
         unit=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=MEASUREMENT,
         entity_registry_enabled_default=enabled,
+        value_type=value_type,
+        scale=scale,
     )
 
 
-def _va(key: str, address: int, name: str, enabled: bool = True) -> RegisterDefinition:
+def _va(
+    key: str, address: int, name: str, enabled: bool = True,
+    *, value_type: str = "float32", scale: float = 1.0,
+) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
         unit="VA",
         device_class=SensorDeviceClass.APPARENT_POWER,
         state_class=MEASUREMENT,
         entity_registry_enabled_default=enabled,
+        value_type=value_type,
+        scale=scale,
     )
 
 
-def _var(key: str, address: int, name: str, enabled: bool = True) -> RegisterDefinition:
+def _var(
+    key: str, address: int, name: str, enabled: bool = True,
+    *, value_type: str = "float32", scale: float = 1.0,
+) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
         unit="var",
         device_class=SensorDeviceClass.REACTIVE_POWER,
         state_class=MEASUREMENT,
         entity_registry_enabled_default=enabled,
+        value_type=value_type,
+        scale=scale,
     )
 
 
-def _pf(key: str, address: int, name: str, enabled: bool = True) -> RegisterDefinition:
+def _pf(
+    key: str, address: int, name: str, enabled: bool = True,
+    *, value_type: str = "float32", scale: float = 1.0,
+) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
         unit=None,
         device_class=SensorDeviceClass.POWER_FACTOR,
         state_class=MEASUREMENT,
         entity_registry_enabled_default=enabled,
+        value_type=value_type,
+        scale=scale,
     )
 
 
@@ -132,32 +218,46 @@ def _deg(key: str, address: int, name: str) -> RegisterDefinition:
     )
 
 
-def _hz(key: str, address: int, name: str) -> RegisterDefinition:
+def _hz(
+    key: str, address: int, name: str, *, value_type: str = "float32", scale: float = 1.0
+) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
         unit=UnitOfFrequency.HERTZ,
         device_class=SensorDeviceClass.FREQUENCY,
         state_class=MEASUREMENT,
+        value_type=value_type,
+        scale=scale,
     )
 
 
-def _kwh(key: str, address: int, name: str, resettable: bool = False, enabled: bool = True) -> RegisterDefinition:
+def _kwh(
+    key: str, address: int, name: str, resettable: bool = False, enabled: bool = True,
+    *, value_type: str = "float32", scale: float = 1.0,
+) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
         unit=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=TOTAL if resettable else TOTAL_INCREASING,
         entity_registry_enabled_default=enabled,
+        value_type=value_type,
+        scale=scale,
     )
 
 
-def _kvarh(key: str, address: int, name: str, resettable: bool = False, enabled: bool = True) -> RegisterDefinition:
+def _kvarh(
+    key: str, address: int, name: str, resettable: bool = False, enabled: bool = True,
+    *, value_type: str = "float32", scale: float = 1.0,
+) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
         unit="kvarh",
         state_class=TOTAL if resettable else TOTAL_INCREASING,
         icon="mdi:lightning-bolt",
         entity_registry_enabled_default=enabled,
+        value_type=value_type,
+        scale=scale,
     )
 
 
@@ -360,11 +460,154 @@ SDM72V2_REGISTERS: list[RegisterDefinition] = [
     _w("total_export_power", 1282, "Total export power"),
 ]
 
+# --------------------------------------------------------------------------
+# Victron ET112 - single phase (Carlo Gavazzi EM111 protocol). Every
+# parameter below is a plain signed integer, not a float - see the
+# module docstring. Demand/peak-demand and partial/tariff energy
+# registers are intentionally left out (not useful for HA polling).
+# --------------------------------------------------------------------------
+ET112_REGISTERS: list[RegisterDefinition] = [
+    _v("voltage", 0, "Voltage", value_type="int32", scale=10),
+    _a("current", 2, "Current", value_type="int32", scale=1000),
+    _w("active_power", 4, "Active power", value_type="int32", scale=10),
+    _va("apparent_power", 6, "Apparent power", enabled=False, value_type="int32", scale=10),
+    _var("reactive_power", 8, "Reactive power", enabled=False, value_type="int32", scale=10),
+    _pf("power_factor", 14, "Power factor", enabled=False, value_type="int16", scale=1000),
+    _hz("frequency", 15, "Frequency", value_type="int16", scale=10),
+    _kwh("import_active_energy", 16, "Import active energy", value_type="int32", scale=10),
+    _kvarh("import_reactive_energy", 18, "Import reactive energy", enabled=False, value_type="int32", scale=10),
+    _kwh("export_active_energy", 32, "Export active energy", value_type="int32", scale=10),
+    _kvarh("export_reactive_energy", 34, "Export reactive energy", enabled=False, value_type="int32", scale=10),
+]
+
+# --------------------------------------------------------------------------
+# Victron ET340 - three phase (Carlo Gavazzi EM340 protocol).
+# --------------------------------------------------------------------------
+ET340_REGISTERS: list[RegisterDefinition] = [
+    _v("l1_voltage", 0, "L1 voltage", value_type="int32", scale=10),
+    _v("l2_voltage", 2, "L2 voltage", value_type="int32", scale=10),
+    _v("l3_voltage", 4, "L3 voltage", value_type="int32", scale=10),
+    _a("l1_current", 12, "L1 current", value_type="int32", scale=1000),
+    _a("l2_current", 14, "L2 current", value_type="int32", scale=1000),
+    _a("l3_current", 16, "L3 current", value_type="int32", scale=1000),
+    _w("l1_power", 18, "L1 power", value_type="int32", scale=10),
+    _w("l2_power", 20, "L2 power", value_type="int32", scale=10),
+    _w("l3_power", 22, "L3 power", value_type="int32", scale=10),
+    _va("l1_apparent_power", 24, "L1 apparent power", enabled=False, value_type="int32", scale=10),
+    _va("l2_apparent_power", 26, "L2 apparent power", enabled=False, value_type="int32", scale=10),
+    _va("l3_apparent_power", 28, "L3 apparent power", enabled=False, value_type="int32", scale=10),
+    _var("l1_reactive_power", 30, "L1 reactive power", enabled=False, value_type="int32", scale=10),
+    _var("l2_reactive_power", 32, "L2 reactive power", enabled=False, value_type="int32", scale=10),
+    _var("l3_reactive_power", 34, "L3 reactive power", enabled=False, value_type="int32", scale=10),
+    _w("total_power", 40, "Total power", value_type="int32", scale=10),
+    _va("total_apparent_power", 42, "Total apparent power", enabled=False, value_type="int32", scale=10),
+    _var("total_reactive_power", 44, "Total reactive power", enabled=False, value_type="int32", scale=10),
+    _pf("l1_power_factor", 46, "L1 power factor", enabled=False, value_type="int16", scale=1000),
+    _pf("l2_power_factor", 47, "L2 power factor", enabled=False, value_type="int16", scale=1000),
+    _pf("l3_power_factor", 48, "L3 power factor", enabled=False, value_type="int16", scale=1000),
+    _pf("power_factor", 49, "Power factor", enabled=False, value_type="int16", scale=1000),
+    _hz("frequency", 51, "Frequency", value_type="int16", scale=10),
+    _kwh("import_active_energy", 52, "Import active energy", value_type="int32", scale=10),
+    _kvarh("import_reactive_energy", 54, "Import reactive energy", enabled=False, value_type="int32", scale=10),
+    _kwh("export_active_energy", 78, "Export active energy", value_type="int32", scale=10),
+    _kvarh("export_reactive_energy", 80, "Export reactive energy", enabled=False, value_type="int32", scale=10),
+]
+
+# --------------------------------------------------------------------------
+# Victron EM540 - three phase (Carlo Gavazzi EM530/EM540 protocol).
+# ET340 sibling, plus L-L voltages and an L-N/L-L system average.
+# --------------------------------------------------------------------------
+EM540_REGISTERS: list[RegisterDefinition] = [
+    _v("l1_voltage", 0, "L1 voltage", value_type="int32", scale=10),
+    _v("l2_voltage", 2, "L2 voltage", value_type="int32", scale=10),
+    _v("l3_voltage", 4, "L3 voltage", value_type="int32", scale=10),
+    _v("l1l2_voltage", 6, "L1-L2 voltage", enabled=False, value_type="int32", scale=10),
+    _v("l2l3_voltage", 8, "L2-L3 voltage", enabled=False, value_type="int32", scale=10),
+    _v("l3l1_voltage", 10, "L3-L1 voltage", enabled=False, value_type="int32", scale=10),
+    _a("l1_current", 12, "L1 current", value_type="int32", scale=1000),
+    _a("l2_current", 14, "L2 current", value_type="int32", scale=1000),
+    _a("l3_current", 16, "L3 current", value_type="int32", scale=1000),
+    _w("l1_power", 18, "L1 power", value_type="int32", scale=10),
+    _w("l2_power", 20, "L2 power", value_type="int32", scale=10),
+    _w("l3_power", 22, "L3 power", value_type="int32", scale=10),
+    _va("l1_apparent_power", 24, "L1 apparent power", enabled=False, value_type="int32", scale=10),
+    _va("l2_apparent_power", 26, "L2 apparent power", enabled=False, value_type="int32", scale=10),
+    _va("l3_apparent_power", 28, "L3 apparent power", enabled=False, value_type="int32", scale=10),
+    _var("l1_reactive_power", 30, "L1 reactive power", enabled=False, value_type="int32", scale=10),
+    _var("l2_reactive_power", 32, "L2 reactive power", enabled=False, value_type="int32", scale=10),
+    _var("l3_reactive_power", 34, "L3 reactive power", enabled=False, value_type="int32", scale=10),
+    _v("avg_ln_voltage", 36, "Average L-N voltage", value_type="int32", scale=10),
+    _v("avg_ll_voltage", 38, "Average L-L voltage", enabled=False, value_type="int32", scale=10),
+    _w("total_power", 40, "Total power", value_type="int32", scale=10),
+    _va("total_apparent_power", 42, "Total apparent power", enabled=False, value_type="int32", scale=10),
+    _var("total_reactive_power", 44, "Total reactive power", enabled=False, value_type="int32", scale=10),
+    _pf("l1_power_factor", 46, "L1 power factor", enabled=False, value_type="int16", scale=1000),
+    _pf("l2_power_factor", 47, "L2 power factor", enabled=False, value_type="int16", scale=1000),
+    _pf("l3_power_factor", 48, "L3 power factor", enabled=False, value_type="int16", scale=1000),
+    _pf("power_factor", 49, "Power factor", enabled=False, value_type="int16", scale=1000),
+    _hz("frequency", 51, "Frequency", value_type="int16", scale=10),
+    _kwh("import_active_energy", 52, "Import active energy", value_type="int32", scale=10),
+    _kvarh("import_reactive_energy", 54, "Import reactive energy", enabled=False, value_type="int32", scale=10),
+    _kwh("export_active_energy", 78, "Export active energy", value_type="int32", scale=10),
+    _kvarh("export_reactive_energy", 80, "Export reactive energy", enabled=False, value_type="int32", scale=10),
+    RegisterDefinition(
+        "total_apparent_energy", 86, "Total apparent energy", unit="kVAh",
+        state_class=TOTAL_INCREASING, entity_registry_enabled_default=False,
+        value_type="int32", scale=10,
+    ),
+]
+
+# --------------------------------------------------------------------------
+# Chint DTSU666 - three phase, holding registers (function 03h), plain
+# IEEE754 floats like the Eastron family (no scale factor needed).
+# Addresses below are the manual's documented hex register addresses,
+# used directly (no 30001-style base to subtract, unlike the Eastron/
+# Carlo Gavazzi "3xxxx" input-register convention).
+# --------------------------------------------------------------------------
+DTSU666_REGISTERS: list[RegisterDefinition] = [
+    _v("l1l2_voltage", 0x2000, "L1-L2 voltage", enabled=False),
+    _v("l2l3_voltage", 0x2002, "L2-L3 voltage", enabled=False),
+    _v("l3l1_voltage", 0x2004, "L3-L1 voltage", enabled=False),
+    _v("l1_voltage", 0x2006, "L1 voltage"),
+    _v("l2_voltage", 0x2008, "L2 voltage"),
+    _v("l3_voltage", 0x200A, "L3 voltage"),
+    _a("l1_current", 0x200C, "L1 current"),
+    _a("l2_current", 0x200E, "L2 current"),
+    _a("l3_current", 0x2010, "L3 current"),
+    _w("total_power", 0x2012, "Total power"),
+    _w("l1_power", 0x2014, "L1 power"),
+    _w("l2_power", 0x2016, "L2 power"),
+    _w("l3_power", 0x2018, "L3 power"),
+    _var("total_reactive_power", 0x201A, "Total reactive power", enabled=False),
+    _var("l1_reactive_power", 0x201C, "L1 reactive power", enabled=False),
+    _var("l2_reactive_power", 0x201E, "L2 reactive power", enabled=False),
+    _var("l3_reactive_power", 0x2020, "L3 reactive power", enabled=False),
+    _pf("power_factor", 0x202A, "Power factor", enabled=False),
+    _pf("l1_power_factor", 0x202C, "L1 power factor", enabled=False),
+    _pf("l2_power_factor", 0x202E, "L2 power factor", enabled=False),
+    _pf("l3_power_factor", 0x2030, "L3 power factor", enabled=False),
+    _hz("frequency", 0x2044, "Frequency"),
+    _kwh("import_active_energy", 0x101E, "Import active energy"),
+    _kwh("l1_import_active_energy", 0x1020, "L1 import active energy", enabled=False),
+    _kwh("l2_import_active_energy", 0x1022, "L2 import active energy", enabled=False),
+    _kwh("l3_import_active_energy", 0x1024, "L3 import active energy", enabled=False),
+    _kwh("net_import_active_energy", 0x1026, "Net import active energy", enabled=False),
+    _kwh("export_active_energy", 0x1028, "Export active energy"),
+    _kwh("l1_export_active_energy", 0x102A, "L1 export active energy", enabled=False),
+    _kwh("l2_export_active_energy", 0x102C, "L2 export active energy", enabled=False),
+    _kwh("l3_export_active_energy", 0x102E, "L3 export active energy", enabled=False),
+    _kwh("net_export_active_energy", 0x1030, "Net export active energy", enabled=False),
+]
+
 REGISTER_MAP: dict[str, list[RegisterDefinition]] = {
     MODEL_SDM230: SDM230_REGISTERS,
     MODEL_SDM630: SDM630_REGISTERS,
     MODEL_SDM120: SDM120_REGISTERS,
     MODEL_SDM72V2: SDM72V2_REGISTERS,
+    MODEL_ET112: ET112_REGISTERS,
+    MODEL_ET340: ET340_REGISTERS,
+    MODEL_EM540: EM540_REGISTERS,
+    MODEL_DTSU666: DTSU666_REGISTERS,
 }
 
 
@@ -374,6 +617,31 @@ def decode_float32(registers: list[int], offset: int) -> float:
     hi, lo = registers[offset], registers[offset + 1]
     raw = (hi << 16) | lo
     return struct.unpack(">f", raw.to_bytes(4, "big"))[0]
+
+
+def decode_int(registers: list[int], offset: int, count: int, scale: float) -> float:
+    """Decode a big-endian signed integer (1 register = int16, 2 =
+    int32) from a list of 16-bit register values, starting at
+    ``offset``, and divide it by ``scale`` to get the physical value -
+    the Carlo Gavazzi/Victron encoding (see module docstring)."""
+    raw = 0
+    for reg in registers[offset : offset + count]:
+        raw = (raw << 16) | reg
+    bits = count * 16
+    if raw >= 1 << (bits - 1):
+        raw -= 1 << bits
+    return raw / scale
+
+
+def decode_register(registers: list[int], offset: int, register: RegisterDefinition) -> float:
+    """Decode one parameter's raw register(s) into its physical value,
+    dispatching on ``register.value_type`` (see ``RegisterDefinition``
+    in this module for what each value_type means)."""
+    if register.value_type == "float32":
+        return decode_float32(registers, offset)
+    if register.value_type in ("int16", "int32"):
+        return decode_int(registers, offset, register.count, register.scale)
+    raise ValueError(f"Unknown value_type {register.value_type!r} for register {register.key!r}")
 
 
 @dataclass(frozen=True)
