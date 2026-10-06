@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import timedelta
 from typing import Callable
 
@@ -22,6 +23,8 @@ from .const import (
     MAX_REGISTER_GAP,
     MAX_REGISTERS_PER_READ,
     MODBUS_READ_TIMEOUT,
+    WATCHDOG_MIN_SECONDS,
+    WATCHDOG_SCAN_INTERVAL_MULTIPLIER,
 )
 from .modbus_client import GatewayHandle
 from .registers import REGISTER_MAP, ReadBlock, RegisterDefinition, build_read_blocks, decode_register
@@ -76,6 +79,21 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
         # Also float-from-NumberSelector; timedelta tolerates a float, but
         # keep it an int for tidy logs and consistency with unit_id above.
         scan_interval = int(subentry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
+
+        # Proactive reconnect watchdog (option 2, 2026-09-09 analysis): the
+        # monotonic time this coordinator last completed a poll
+        # successfully. Initialised to "now" so a slow first poll right
+        # after HA startup/reload doesn't immediately look like a stuck
+        # gateway before it's had a fair first try.
+        self._last_own_success = time.monotonic()
+        # How far behind its own scan_interval this meter is allowed to
+        # fall before the watchdog proactively recycles the shared
+        # gateway connection, rather than waiting for a read to actually
+        # hang (see MODBUS_READ_TIMEOUT). Floored so a short scan_interval
+        # doesn't make this hair-triggered on ordinary jitter.
+        self._watchdog_threshold = max(
+            scan_interval * WATCHDOG_SCAN_INTERVAL_MULTIPLIER, WATCHDOG_MIN_SECONDS
+        )
 
         super().__init__(
             hass,
@@ -159,6 +177,28 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
         # Serialise all traffic for this gateway: RS485 is half-duplex,
         # and other meters on the same bus share this lock too.
         async with self.gateway.lock:
+            # Proactive reconnect watchdog: if *this* meter hasn't had a
+            # successful poll in a while - well beyond its own
+            # scan_interval - the shared gateway connection is recycled
+            # before even attempting this read, instead of waiting for a
+            # read to actually hang against MODBUS_READ_TIMEOUT. This is
+            # what catches the gateway quietly settling into a chronic
+            # multiple of its configured cadence (e.g. 60-90s instead of
+            # 5s) without ever producing a timeout/reconnect log line or
+            # an `unavailable` state - every read still succeeds, just
+            # slower and slower. should_recreate_now() keeps several
+            # coordinators sharing this gateway from thrashing the same
+            # connection if one of them already recycled it moments ago.
+            since_own_success = time.monotonic() - self._last_own_success
+            if since_own_success > self._watchdog_threshold and self.gateway.should_recreate_now():
+                await self.gateway.recreate(
+                    reason=(
+                        f"no successful read for unit {self.unit_id} in "
+                        f"{since_own_success:.0f}s (> {self._watchdog_threshold:.0f}s, "
+                        f"{WATCHDOG_SCAN_INTERVAL_MULTIPLIER}x scan_interval) - proactive watchdog"
+                    )
+                )
+
             # Fetched fresh (not cached on self) so a reconnect done by
             # another meter's coordinator earlier in this poll cycle -
             # or by this one, below - is always picked up.
@@ -185,8 +225,16 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
                     # other meter on this bus races us) and fail *this*
                     # poll cleanly; the next scheduled poll - for this
                     # meter or any other on the same gateway - gets a
-                    # fresh connection to try again.
-                    await self.gateway.recreate()
+                    # fresh connection to try again. should_recreate_now()
+                    # avoids a second teardown if another meter on this
+                    # bus already recycled the connection moments ago.
+                    if self.gateway.should_recreate_now():
+                        await self.gateway.recreate(
+                            reason=(
+                                f"read for unit {self.unit_id} timed out after "
+                                f"{MODBUS_READ_TIMEOUT}s - connection looks stuck"
+                            )
+                        )
                     raise UpdateFailed(
                         f"Timed out after {MODBUS_READ_TIMEOUT}s reading registers "
                         f"{block.start_address}-{block.start_address + block.quantity} from "
@@ -209,4 +257,10 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
                             "Could not decode register %s (offset %s) for unit %s",
                             reg.key, offset, self.unit_id,
                         )
+            # All blocks read without raising: this poll succeeded, so
+            # reset the proactive watchdog's clock. (Reached only on the
+            # happy path; a timeout/error raises out of the lock above
+            # and leaves _last_own_success untouched, so a sustained
+            # slowdown eventually trips the watchdog on a later poll.)
+            self._last_own_success = time.monotonic()
         return data

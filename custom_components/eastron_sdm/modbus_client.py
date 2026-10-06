@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,6 +34,7 @@ from .const import (
     CONNECTION_SERIAL,
     CONNECTION_TCP,
     DOMAIN,
+    MIN_SECONDS_BETWEEN_RECREATES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -65,6 +67,11 @@ class GatewayHandle:
     connection_data: dict[str, Any]
     refcount: int = 0
     _unit_clients: dict[int, Any] = None  # type: ignore[assignment]
+    # Monotonic time of the last recreate() on this shared gateway (by
+    # any meter on it), or None if it has never been recycled. Used by
+    # should_recreate_now() to stop several coordinators thrashing the
+    # same connection back-to-back - see MIN_SECONDS_BETWEEN_RECREATES.
+    _last_recreate: float | None = None
 
     def __post_init__(self) -> None:
         if self._unit_clients is None:
@@ -77,27 +84,50 @@ class GatewayHandle:
             self._unit_clients[unit_id] = client
         return client
 
-    async def recreate(self) -> None:
+    def should_recreate_now(self) -> bool:
+        """Whether a (proactive or reactive) recreate is allowed right
+        now, or whether another meter on this gateway recycled the
+        connection too recently to tear it down again.
+
+        A freshly reopened TCP session needs a moment to prove itself
+        before being torn down a second time; without this throttle,
+        6 coordinators all seeing the same slowness in the same poll
+        cycle would reconnect 6 times in a row. Callers should be
+        holding ``lock`` so the check and the recreate() that follows
+        are atomic for this bus.
+        """
+        if self._last_recreate is None:
+            return True
+        return (time.monotonic() - self._last_recreate) >= MIN_SECONDS_BETWEEN_RECREATES
+
+    async def recreate(self, reason: str | None = None) -> None:
         """Force-close and reopen the underlying connection.
 
         Call this when a read has stalled well past
-        ``MODBUS_READ_TIMEOUT`` - a healthy gateway never takes that
-        long, so the shared connection is assumed to be stuck/stale
-        and unlikely to recover on its own (this has been observed in
+        ``MODBUS_READ_TIMEOUT``, or when the proactive watchdog sees a
+        meter's successful-poll cadence creep far past its
+        scan_interval - a healthy gateway never behaves that way, so
+        the shared connection is assumed to be stuck/stale and
+        unlikely to recover on its own (this has been observed in
         practice: response times climb gradually over hours of uptime
         with no error ever being raised, until a read effectively
         hangs). Callers must be holding ``lock`` while calling this,
         so no other meter on this bus starts a request against the
         half-replaced connection.
 
-        Existing per-unit clients (``_unit_clients``) are tied to the
-        old connection's transport, so they're dropped here; callers
-        must fetch a fresh one via ``client_for()`` afterwards.
+        ``reason`` is logged so the trigger (hard read timeout vs.
+        proactive watchdog) is visible. Existing per-unit clients
+        (``_unit_clients``) are tied to the old connection's transport,
+        so they're dropped here; callers must fetch a fresh one via
+        ``client_for()`` afterwards.
         """
+        # Stamp first: even if the reopen below throws, we don't want a
+        # pile-up of meters all retrying a recreate on the same tick.
+        self._last_recreate = time.monotonic()
         _LOGGER.warning(
-            "Eastron SDM gateway %s: read timed out, connection looks stuck - "
-            "forcing a reconnect",
+            "Eastron SDM gateway %s: forcing a reconnect (%s)",
             gateway_key(self.connection_data),
+            reason or "read timed out, connection looks stuck",
         )
         try:
             await self.base_client.__aexit__(None, None, None)

@@ -120,6 +120,33 @@ DEFAULT_SCAN_INTERVAL = 30  # seconds
 # GatewayHandle.recreate() in modbus_client.py.
 MODBUS_READ_TIMEOUT = 15  # seconds
 
+# --- Proactive reconnect watchdog (option 2 from the 2026-09-09 gateway
+# degradation analysis) ----------------------------------------------------
+# MODBUS_READ_TIMEOUT above only catches a read that is *itself* stuck for
+# 15s. In practice the observed degradation is often milder than that: every
+# individual read still completes (no error, no `unavailable`), but the
+# gateway responds slower and slower, so the actual time between successful
+# polls for a given meter creeps from ~5s up to 60-120s while nothing ever
+# trips the hard per-read timeout - this was confirmed on 2026-10-06, where
+# the gateway sat at a chronic ~55-90s cadence (vs. a configured 5s
+# scan_interval) for at least several days without a single reconnect/
+# timeout log line.
+#
+# To catch that case, each coordinator tracks when *it* last completed a
+# poll successfully. If that is significantly longer ago than its own
+# scan_interval, the shared gateway connection is proactively recycled
+# before this read is even attempted, instead of waiting for a read to
+# actually hang.
+WATCHDOG_SCAN_INTERVAL_MULTIPLIER = 3
+WATCHDOG_MIN_SECONDS = 30  # floor, so a very short scan_interval doesn't make this hair-triggered
+# Shared across all meters on one gateway: once any coordinator forces a
+# proactive or reactive recreate(), don't let another one force a second
+# one within this many seconds - a fresh TCP session needs a moment to
+# prove itself before being torn down again, and this avoids 6 coordinators
+# thrashing the same connection back-to-back if the underlying slowness
+# isn't fixed by reconnecting alone.
+MIN_SECONDS_BETWEEN_RECREATES = 60
+
 # Eastron devices (per the official Modbus protocol docs for both the
 # SDM230 and SDM630) refuse a single transaction that spans more than
 # 40 parameters (=80 16-bit registers). We stay comfortably under that
