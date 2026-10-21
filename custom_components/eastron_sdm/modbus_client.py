@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,6 +34,8 @@ from .const import (
     CONNECTION_SERIAL,
     CONNECTION_TCP,
     DOMAIN,
+    GATEWAY_CONNECT_TIMEOUT,
+    MIN_SECONDS_BETWEEN_RECREATES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -62,9 +65,14 @@ class GatewayHandle:
 
     base_client: Any
     lock: asyncio.Lock
-    data: dict[str, Any]
+    connection_data: dict[str, Any]
     refcount: int = 0
     _unit_clients: dict[int, Any] = None  # type: ignore[assignment]
+    # Monotonic time of the last recreate() on this shared gateway (by
+    # any meter on it), or None if it has never been recycled. Used by
+    # should_recreate_now() to stop several coordinators thrashing the
+    # same connection back-to-back - see MIN_SECONDS_BETWEEN_RECREATES.
+    _last_recreate: float | None = None
 
     def __post_init__(self) -> None:
         if self._unit_clients is None:
@@ -77,37 +85,74 @@ class GatewayHandle:
             self._unit_clients[unit_id] = client
         return client
 
-    async def reconnect(self) -> None:
-        """Force-close the underlying gateway connection and build a
-        fresh one.
+    def should_recreate_now(self) -> bool:
+        """Whether a (proactive or reactive) recreate is allowed right
+        now, or whether another meter on this gateway recycled the
+        connection too recently to tear it down again.
 
-        RS485 gateways (especially cheap RS485<->TCP bridges) can wedge
-        after hours of continuous polling: the socket stays "open" but
-        no reply ever comes back, so every meter behind it starts
-        timing out. Tearing the connection down and rebuilding it fixes
-        all meters on the bus at once, without a HA restart.
-
-        Callers MUST hold ``self.lock`` while calling this (it is the
-        same lock that serialises every request over this gateway), so
-        no request is in flight against the old client while we swap it
-        out. The cached per-unit clients are cleared as well: each
-        meter fetches its client fresh via ``client_for()`` on its next
-        poll and so transparently picks up the new connection.
+        A freshly reopened TCP session needs a moment to prove itself
+        before being torn down a second time; without this throttle,
+        6 coordinators all seeing the same slowness in the same poll
+        cycle would reconnect 6 times in a row. Callers should be
+        holding ``lock`` so the check and the recreate() that follows
+        are atomic for this bus.
         """
+        if self._last_recreate is None:
+            return True
+        return (time.monotonic() - self._last_recreate) >= MIN_SECONDS_BETWEEN_RECREATES
+
+    async def recreate(self, reason: str | None = None) -> None:
+        """Force-close and reopen the underlying connection.
+
+        Call this when a read has stalled well past
+        ``MODBUS_READ_TIMEOUT``, or when the proactive watchdog sees a
+        meter's successful-poll cadence creep far past its
+        scan_interval - a healthy gateway never behaves that way, so
+        the shared connection is assumed to be stuck/stale and
+        unlikely to recover on its own (this has been observed in
+        practice: response times climb gradually over hours of uptime
+        with no error ever being raised, until a read effectively
+        hangs). Callers must be holding ``lock`` while calling this,
+        so no other meter on this bus starts a request against the
+        half-replaced connection.
+
+        ``reason`` is logged so the trigger (hard read timeout vs.
+        proactive watchdog) is visible. Existing per-unit clients
+        (``_unit_clients``) are tied to the old connection's transport,
+        so they're dropped here; callers must fetch a fresh one via
+        ``client_for()`` afterwards.
+        """
+        # Stamp first: even if the reopen below throws, we don't want a
+        # pile-up of meters all retrying a recreate on the same tick.
+        self._last_recreate = time.monotonic()
         _LOGGER.warning(
-            "Eastron SDM gateway %s appears wedged - forcing reconnect",
-            gateway_key(self.data),
+            "Eastron SDM gateway %s: forcing a reconnect (%s)",
+            gateway_key(self.connection_data),
+            reason or "read timed out, connection looks stuck",
         )
-        try:
-            await self.base_client.__aexit__(None, None, None)
-        except Exception:  # noqa: BLE001
-            _LOGGER.debug("Error closing wedged gateway connection", exc_info=True)
-        # Drop stale per-unit clients before building the new base
-        # client so no meter can keep talking to the dead connection.
+        # EERST weggooien, niet achteraf: de per-unit clients hangen aan het
+        # transport van de oude verbinding. Mislukt het heropenen hieronder,
+        # dan mag een volgende poll nooit alsnog een client van een gesloten
+        # socket uit de cache trekken.
         self._unit_clients.clear()
-        self.base_client = await _create_base_client(self.data)
-        await self.base_client.__aenter__()
-        _LOGGER.info("Eastron SDM gateway %s reconnected", gateway_key(self.data))
+        try:
+            await asyncio.wait_for(
+                self.base_client.__aexit__(None, None, None),
+                timeout=GATEWAY_CONNECT_TIMEOUT,
+            )
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug(
+                "Error while closing stuck Eastron SDM gateway connection (ignored, "
+                "reconnecting anyway)",
+                exc_info=True,
+            )
+        # Pas toewijzen als de nieuwe verbinding ook echt openstaat: anders
+        # staat er een niet-verbonden client in base_client en lijkt alles goed.
+        nieuwe_client = await _create_base_client(self.connection_data)
+        await asyncio.wait_for(
+            nieuwe_client.__aenter__(), timeout=GATEWAY_CONNECT_TIMEOUT
+        )
+        self.base_client = nieuwe_client
 
 
 async def _create_base_client(data: dict[str, Any]):
@@ -170,7 +215,7 @@ async def async_get_gateway(hass: HomeAssistant, data: dict[str, Any]) -> Gatewa
         _LOGGER.debug("Opening new Eastron SDM gateway connection: %s", key)
         base_client = await _create_base_client(data)
         await base_client.__aenter__()
-        handle = GatewayHandle(base_client=base_client, lock=asyncio.Lock(), data=data)
+        handle = GatewayHandle(base_client=base_client, lock=asyncio.Lock(), connection_data=data)
         gateways[key] = handle
     handle.refcount += 1
     return handle

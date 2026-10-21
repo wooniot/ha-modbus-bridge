@@ -58,7 +58,48 @@ DEFAULT_WAIT_BETWEEN_REQUESTS_SERIAL = 30
 # --- Meter models ------------------------------------------------------
 MODEL_SDM230 = "sdm230"
 MODEL_SDM630 = "sdm630"
-MODELS = [MODEL_SDM230, MODEL_SDM630]
+MODEL_SDM120 = "sdm120"
+MODEL_SDM72V2 = "sdm72v2"
+# Victron Energy meters - these are Carlo Gavazzi devices sold under a
+# Victron model name/firmware (ET112 = Carlo Gavazzi EM111, ET340 =
+# Carlo Gavazzi EM340, EM540 = Carlo Gavazzi EM530/EM540). Different
+# manufacturer/protocol family from the Eastron SDM meters above (see
+# registers.py: plain scaled integers instead of IEEE754 floats), but
+# supported by the same gateway/coordinator machinery.
+MODEL_ET112 = "et112"
+MODEL_ET340 = "et340"
+MODEL_EM540 = "em540"
+# Chint DTSU666 - three phase meter, popular as the grid/CT meter for
+# solar inverters/EV chargers (Deye, Growatt, Sofar, Huawei, ...).
+# Same IEEE754-float register encoding as the Eastron SDM family, but
+# its registers are Modbus *holding* registers (function 03h) rather
+# than *input* registers (function 04h) - see HOLDING_REGISTER_MODELS
+# below and registers.py.
+MODEL_DTSU666 = "dtsu666"
+MODELS = [
+    MODEL_SDM230,
+    MODEL_SDM630,
+    MODEL_SDM120,
+    MODEL_SDM72V2,
+    MODEL_ET112,
+    MODEL_ET340,
+    MODEL_EM540,
+    MODEL_DTSU666,
+]
+
+# Manufacturer shown on each meter's Device page, keyed by model - used
+# by sensor.py. Every model not listed here defaults to "Eastron".
+MANUFACTURERS = {
+    MODEL_ET112: "Victron Energy",
+    MODEL_ET340: "Victron Energy",
+    MODEL_EM540: "Victron Energy",
+    MODEL_DTSU666: "Chint",
+}
+
+# Models whose registers must be read with Modbus function 03h ("read
+# holding registers") instead of the 04h ("read input registers") used
+# by every other supported model - see coordinator.py.
+HOLDING_REGISTER_MODELS = {MODEL_DTSU666}
 
 # --- Subentries ------------------------------------------------------
 # Each physical meter on the bus is a subentry of type "meter" under
@@ -68,13 +109,49 @@ SUBENTRY_TYPE_METER = "meter"
 # --- Polling -------------------------------------------------------------
 DEFAULT_SCAN_INTERVAL = 30  # seconds
 
-# Hard upper bound on how long a single register read may take before we
-# give up and force the whole gateway connection to be rebuilt. tmodbus
-# has its own ~10s per-request timeout; this sits comfortably above it so
-# a normal slow-but-recovering read is handled by tmodbus itself, and we
-# only step in when a read hangs past the point where the connection is
-# clearly wedged (observed after several hours of continuous polling).
+# Watchdog timeout for a single Modbus read (register block), in
+# seconds. tmodbus applies its own ~10s per-transaction timeout
+# internally, so this is set comfortably above that - it exists to
+# catch a *stuck* shared connection (the TCP socket to the gateway
+# going quietly stale after hours of uptime, with no error, just ever
+# slower responses) rather than a normal single slow/lost response.
+# When a read blows through this, the gateway connection is assumed
+# unrecoverable and is force-closed and reopened - see
+# GatewayHandle.recreate() in modbus_client.py.
 MODBUS_READ_TIMEOUT = 15  # seconds
+
+# --- Proactive reconnect watchdog (option 2 from the 2026-09-09 gateway
+# degradation analysis) ----------------------------------------------------
+# MODBUS_READ_TIMEOUT above only catches a read that is *itself* stuck for
+# 15s. In practice the observed degradation is often milder than that: every
+# individual read still completes (no error, no `unavailable`), but the
+# gateway responds slower and slower, so the actual time between successful
+# polls for a given meter creeps from ~5s up to 60-120s while nothing ever
+# trips the hard per-read timeout - this was confirmed on 2026-10-06, where
+# the gateway sat at a chronic ~55-90s cadence (vs. a configured 5s
+# scan_interval) for at least several days without a single reconnect/
+# timeout log line.
+#
+# To catch that case, each coordinator tracks when *it* last completed a
+# poll successfully. If that is significantly longer ago than its own
+# scan_interval, the shared gateway connection is proactively recycled
+# before this read is even attempted, instead of waiting for a read to
+# actually hang.
+WATCHDOG_SCAN_INTERVAL_MULTIPLIER = 3
+WATCHDOG_MIN_SECONDS = 30  # floor, so a very short scan_interval doesn't make this hair-triggered
+# Shared across all meters on one gateway: once any coordinator forces a
+# proactive or reactive recreate(), don't let another one force a second
+# one within this many seconds - a fresh TCP session needs a moment to
+# prove itself before being torn down again, and this avoids 6 coordinators
+# thrashing the same connection back-to-back if the underlying slowness
+# isn't fixed by reconnecting alone.
+MIN_SECONDS_BETWEEN_RECREATES = 60
+
+# Openen en sluiten van de gatewayverbinding gebeurt terwijl de gedeelde lock
+# vastgehouden wordt: hangt dat, dan ligt de hele bus stil zonder dat
+# MODBUS_READ_TIMEOUT daar iets tegen doet (een half bereikbare gateway laat
+# een TCP-connect minutenlang hangen). Daarom een eigen, korte grens.
+GATEWAY_CONNECT_TIMEOUT = 10  # seconden
 
 # Eastron devices (per the official Modbus protocol docs for both the
 # SDM230 and SDM630) refuse a single transaction that spans more than

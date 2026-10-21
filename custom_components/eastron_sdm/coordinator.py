@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import timedelta
 from typing import Callable
 
@@ -18,12 +19,15 @@ from .const import (
     CONF_UNIT_ID,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    HOLDING_REGISTER_MODELS,
     MAX_REGISTER_GAP,
     MAX_REGISTERS_PER_READ,
     MODBUS_READ_TIMEOUT,
+    WATCHDOG_MIN_SECONDS,
+    WATCHDOG_SCAN_INTERVAL_MULTIPLIER,
 )
 from .modbus_client import GatewayHandle
-from .registers import REGISTER_MAP, ReadBlock, RegisterDefinition, build_read_blocks, decode_float32
+from .registers import REGISTER_MAP, ReadBlock, RegisterDefinition, build_read_blocks, decode_register
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,13 +51,22 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
         self.entry = entry
         self.subentry = subentry
         self.gateway = gateway
-        self.unit_id: int = subentry.data[CONF_UNIT_ID]
+        # HA's NumberSelector always hands back a float (e.g. 1.0), even
+        # with step=1, so a unit_id coming from the config flow is stored
+        # as a float. tmodbus packs the unit id straight into the Modbus
+        # frame with struct.pack(">...B", ...), which rejects a float with
+        # "required argument is not an integer" - so coerce to int here.
+        # Doing it in the coordinator (not only in the config flow) also
+        # repairs meters that were already stored with a float unit_id,
+        # without the user having to remove and re-add them.
+        self.unit_id: int = int(subentry.data[CONF_UNIT_ID])
         self.model: str = subentry.data[CONF_MODEL]
-        # NB: we deliberately do NOT cache a per-meter client here.
-        # After a forced gateway reconnect the cached clients are
-        # replaced, so every poll fetches its client fresh via
-        # ``self.gateway.client_for()`` - that way a reconnect triggered
-        # by one meter is instantly picked up by all others on the bus.
+        # Not cached on self: fetched fresh from the gateway on every
+        # poll (see _async_update_data) so that a reconnect triggered
+        # by *any* meter on this bus - not just this one - is picked
+        # up immediately, instead of this coordinator being left
+        # holding a client bound to a connection that's already been
+        # replaced.
         # Full register map - sensor.py creates one entity per register
         # from this list so a disabled entity can always be re-enabled
         # later. Only the *polled* set (self.blocks, below) is filtered.
@@ -63,7 +76,27 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
         )
         self._registry_unsub: Callable[[], None] | None = None
 
-        scan_interval = subentry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        # Also float-from-NumberSelector; timedelta tolerates a float, but
+        # keep it an int for tidy logs and consistency with unit_id above.
+        scan_interval = int(subentry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
+
+        # Proactive reconnect watchdog (option 2, 2026-09-09 analysis): the
+        # monotonic time this coordinator last completed a poll
+        # successfully. Initialised to "now" so a slow first poll right
+        # after HA startup/reload doesn't immediately look like a stuck
+        # gateway before it's had a fair first try.
+        self._last_own_success = time.monotonic()
+        # Registers waarvoor al een decodeer-waarschuwing is gelogd; een
+        # verkeerde kaart moet een keer opvallen, niet elke poll opnieuw.
+        self._decode_warned: set[str] = set()
+        # How far behind its own scan_interval this meter is allowed to
+        # fall before the watchdog proactively recycles the shared
+        # gateway connection, rather than waiting for a read to actually
+        # hang (see MODBUS_READ_TIMEOUT). Floored so a short scan_interval
+        # doesn't make this hair-triggered on ordinary jitter.
+        self._watchdog_threshold = max(
+            scan_interval * WATCHDOG_SCAN_INTERVAL_MULTIPLIER, WATCHDOG_MIN_SECONDS
+        )
 
         super().__init__(
             hass,
@@ -147,60 +180,121 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
         # Serialise all traffic for this gateway: RS485 is half-duplex,
         # and other meters on the same bus share this lock too.
         async with self.gateway.lock:
-            # Fetch the client fresh each poll (see __init__): after a
-            # reconnect this returns a client bound to the new
-            # connection.
+            # Proactive reconnect watchdog: if *this* meter hasn't had a
+            # successful poll in a while - well beyond its own
+            # scan_interval - the shared gateway connection is recycled
+            # before even attempting this read, instead of waiting for a
+            # read to actually hang against MODBUS_READ_TIMEOUT. This is
+            # what catches the gateway quietly settling into a chronic
+            # multiple of its configured cadence (e.g. 60-90s instead of
+            # 5s) without ever producing a timeout/reconnect log line or
+            # an `unavailable` state - every read still succeeds, just
+            # slower and slower. should_recreate_now() keeps several
+            # coordinators sharing this gateway from thrashing the same
+            # connection if one of them already recycled it moments ago.
+            since_own_success = time.monotonic() - self._last_own_success
+            if since_own_success > self._watchdog_threshold and self.gateway.should_recreate_now():
+                try:
+                    await self.gateway.recreate(
+                        reason=(
+                            f"no successful read for unit {self.unit_id} in "
+                            f"{since_own_success:.0f}s (> {self._watchdog_threshold:.0f}s, "
+                            f"{WATCHDOG_SCAN_INTERVAL_MULTIPLIER}x scan_interval) - proactive watchdog"
+                        )
+                    )
+                except Exception as err:  # noqa: BLE001
+                    # Heropenen lukte niet (gateway even onbereikbaar, DNS, NAT).
+                    # Deze poll is verloren, maar dat moet hardop gezegd worden:
+                    # stil doorgaan zou de volgende leesfout onverklaarbaar maken.
+                    raise UpdateFailed(
+                        f"Gateway reconnect for unit {self.unit_id} failed: {err}"
+                    ) from err
+
+            # Fetched fresh (not cached on self) so a reconnect done by
+            # another meter's coordinator earlier in this poll cycle -
+            # or by this one, below - is always picked up.
             client = self.gateway.client_for(self.unit_id)
+            # Almost every supported model exposes its measurements as
+            # Modbus *input* registers (function 04h); a few (e.g. the
+            # Chint DTSU666) use *holding* registers (03h) instead -
+            # see HOLDING_REGISTER_MODELS.
+            read = (
+                client.read_holding_registers
+                if self.model in HOLDING_REGISTER_MODELS
+                else client.read_input_registers
+            )
             for block in self.blocks:
                 try:
-                    # tmodbus has its own ~10s per-request timeout; this
-                    # outer guard sits above it and catches the case
-                    # where a request hangs entirely (wedged gateway).
-                    async with asyncio.timeout(MODBUS_READ_TIMEOUT):
-                        raw = await client.read_input_registers(
-                            start_address=block.start_address, quantity=block.quantity
-                        )
-                except asyncio.TimeoutError as err:
-                    # The read hung past tmodbus' own timeout: the gateway
-                    # is wedged. Force the shared connection to be rebuilt
-                    # for every meter on this bus. We still hold the lock,
-                    # so no other request is in flight during the swap.
-                    # This poll fails; the next poll of any meter cleanly
-                    # picks up the fresh connection.
-                    _LOGGER.warning(
-                        "Read of registers %s-%s from unit %s timed out "
-                        "after %ss - reconnecting gateway",
-                        block.start_address,
-                        block.start_address + block.quantity,
-                        self.unit_id,
-                        MODBUS_READ_TIMEOUT,
+                    raw = await asyncio.wait_for(
+                        read(start_address=block.start_address, quantity=block.quantity),
+                        timeout=MODBUS_READ_TIMEOUT,
                     )
-                    try:
-                        await self.gateway.reconnect()
-                    except Exception:  # noqa: BLE001
-                        _LOGGER.exception("Gateway reconnect failed")
+                except TimeoutError as err:
+                    # A single read has no business taking this long -
+                    # the shared connection is presumed stuck. Force a
+                    # reconnect (while still holding the lock, so no
+                    # other meter on this bus races us) and fail *this*
+                    # poll cleanly; the next scheduled poll - for this
+                    # meter or any other on the same gateway - gets a
+                    # fresh connection to try again. should_recreate_now()
+                    # avoids a second teardown if another meter on this
+                    # bus already recycled the connection moments ago.
+                    herstel = "the gateway connection was reset and will be retried on the next poll"
+                    if self.gateway.should_recreate_now():
+                        try:
+                            await self.gateway.recreate(
+                                reason=(
+                                    f"read for unit {self.unit_id} timed out after "
+                                    f"{MODBUS_READ_TIMEOUT}s - connection looks stuck"
+                                )
+                            )
+                        except Exception as reconnect_err:  # noqa: BLE001
+                            # De oorspronkelijke time-out blijft de hoofdoorzaak;
+                            # de mislukte reconnect hoort er zichtbaar bij.
+                            herstel = f"reconnecting the gateway also failed ({reconnect_err})"
                     raise UpdateFailed(
-                        f"Read of registers {block.start_address}-"
-                        f"{block.start_address + block.quantity} from unit "
-                        f"{self.unit_id} timed out after {MODBUS_READ_TIMEOUT}s"
+                        f"Timed out after {MODBUS_READ_TIMEOUT}s reading registers "
+                        f"{block.start_address}-{block.start_address + block.quantity} from "
+                        f"unit {self.unit_id}; {herstel}"
                     ) from err
                 except Exception as err:  # noqa: BLE001
-                    # A protocol/decode-level error (e.g. an Eastron
-                    # exception response) - surface it without tearing
-                    # down the whole bus, exactly as before.
                     raise UpdateFailed(
                         f"Failed reading registers {block.start_address}-"
                         f"{block.start_address + block.quantity} from unit "
                         f"{self.unit_id}: {err}"
                     ) from err
 
+                # Een antwoord dat korter is dan gevraagd betekent dat de
+                # onderste registers ontbreken. Zonder deze controle verdwenen
+                # die sensoren stilletjes uit data terwijl de poll zichzelf
+                # toch als geslaagd afstempelde - inclusief de watchdog.
+                if len(raw) != block.quantity:
+                    raise UpdateFailed(
+                        f"Short read from unit {self.unit_id}: asked for "
+                        f"{block.quantity} registers at {block.start_address}, "
+                        f"got {len(raw)}"
+                    )
+
                 for reg in block.registers:
                     offset = reg.address - block.start_address
                     try:
-                        data[reg.key] = decode_float32(raw, offset)
-                    except (IndexError, ValueError, OverflowError):
-                        _LOGGER.debug(
-                            "Could not decode register %s (offset %s) for unit %s",
-                            reg.key, offset, self.unit_id,
-                        )
+                        data[reg.key] = decode_register(raw, offset, reg)
+                    except (IndexError, ValueError, OverflowError) as err:
+                        # Niet fataal: een enkel register kan een verkeerde
+                        # kaart hebben (de nieuwe modellen zijn nog niet tegen
+                        # echte hardware getoetst). Wel hoorbaar, en maar een
+                        # keer per meter, zodat het niet het logboek volschrijft.
+                        if reg.key not in self._decode_warned:
+                            self._decode_warned.add(reg.key)
+                            _LOGGER.warning(
+                                "Could not decode register %s (offset %s) for unit %s "
+                                "on model %s: %s - check the register map for this model",
+                                reg.key, offset, self.unit_id, self.model, err,
+                            )
+            # All blocks read without raising: this poll succeeded, so
+            # reset the proactive watchdog's clock. (Reached only on the
+            # happy path; a timeout/error raises out of the lock above
+            # and leaves _last_own_success untouched, so a sustained
+            # slowdown eventually trips the watchdog on a later poll.)
+            self._last_own_success = time.monotonic()
         return data

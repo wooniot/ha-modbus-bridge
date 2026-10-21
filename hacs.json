@@ -1,5 +1,5 @@
 {
-  "name": "Eastron SDM Energy Meters",
+  "name": "Eastron / Victron / Chint Energy Meters",
   "homeassistant": "2026.1.0",
   "render_readme": true
 }
