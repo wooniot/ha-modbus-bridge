@@ -1,12 +1,14 @@
-# Eastron / Victron / Chint Energy Meters
+# Eastron Modbus meters
+
+> **Änderung in 1.1.0: nur noch Eastron.** Diese Vorabversion entfernt die Unterstützung für Victron ET112/ET340/EM540 und Chint DTSU666, damit die Integration nur noch einen Hersteller abdeckt und für die Aufnahme in Home Assistant Core angeboten werden kann. Wenn Sie ein solches Gerät nutzen, **bleiben Sie bei v1.0.6** - diese funktioniert weiter und bleibt in HACS und auf der Release-Seite verfügbar. Die Registerkarten dieser Zähler stehen weiterhin in den v1.0.x-Tags, eine Fork kann sie weiterführen.
 
 [English](README.md) | [Nederlands](README.nl.md) | **Deutsch**
 
-> Home-Assistant-Custom-Integration für Eastron-SDM230/SDM630/SDM120/SDM72Modbus-V2-, Victron-ET112/ET340/EM540- und Chint-DTSU666-Energiezähler über Modbus (TCP, RTU-over-TCP oder lokal seriell), mit Abfrageintervallen pro Zähler für Dashboards oder schnelle Nulleinspeisungs-/Lastausgleichs-Anwendungen.
+> Home-Assistant-Custom-Integration für Eastron-SDM230/SDM630/SDM120/SDM72Modbus-V2-Energiezähler über Modbus (TCP, RTU-over-TCP oder lokal seriell), mit Abfrageintervallen pro Zähler für Dashboards oder schnelle Nulleinspeisungs-/Lastausgleichs-Anwendungen.
 
 ## Was sie tut
 
-Dies ist eine Custom-Integration für Home Assistant für Eastron-SDM230/SDM630/SDM120/SDM72Modbus-V2-, Victron-ET112/ET340/EM540- und Chint-DTSU666-Modbus-Energiezähler (ein- und dreiphasig). Sie kommuniziert mit Ihrem/Ihren Zähler(n) über das Modbus-Protokoll und stellt jeden Messwert als nativen Home-Assistant-Sensor bereit - Spannung, Strom, Wirk-/Schein-/Blindleistung, Leistungsfaktor, Frequenz, Import-/Exportenergie, THD% (Eastron), und mehr - mit der richtigen Device-Class, Einheit und Unterstützung für Langzeitstatistiken von Haus aus. Zähler verschiedener Hersteller am selben Bus können frei gemischt werden - z. B. ein Eastron SDM630 neben einem Victron ET340.
+Dies ist eine Custom-Integration für Home Assistant für Eastron-SDM230/SDM630/SDM120/SDM72Modbus-V2-Modbus-Energiezähler (ein- und dreiphasig). Sie kommuniziert mit Ihrem/Ihren Zähler(n) über das Modbus-Protokoll und stellt jeden Messwert als nativen Home-Assistant-Sensor bereit - Spannung, Strom, Wirk-/Schein-/Blindleistung, Leistungsfaktor, Frequenz, Import-/Exportenergie, THD% (Eastron), und mehr - mit der richtigen Device-Class, Einheit und Unterstützung für Langzeitstatistiken von Haus aus. Zähler verschiedener Hersteller am selben Bus können frei gemischt werden - z. B.
 
 ## Was sie bietet
 
@@ -21,7 +23,7 @@ Dies ist eine Custom-Integration für Home Assistant für Eastron-SDM230/SDM630/
 
 ---
 
-Eine Custom-Integration für Home Assistant, um mehrere Eastron-SDM230- (einphasig) und/oder SDM630- (dreiphasig) Modbus-Energiezähler direkt über RS485 auszulesen, ohne Cloud-Abhängigkeit. Aufgebaut auf [tmodbus](https://github.com/wlcrs/tmodbus), derselben modernen, asynchronen Modbus-Bibliothek, die auch Home Assistants eigene "Modernizing Modbus"-Architektur (Release 2026.9) verwendet. Registeradressen und Datentypen stammen direkt aus den offiziellen Protokolldokumenten jedes Herstellers: Eastron (SDM230Modbus V1.4, SDM630Modbus V1.8, SDM120-Modbus-Protokoll, SDM72DM-V2-Benutzerhandbuch V1.1), Carlo Gavazzi/Victron (EM111, EM330/EM340, EM530/EM540 Kommunikationsprotokolle - die zugrunde liegende Hardware hinter den Victron-Modellen ET112/ET340/EM540) und Chint (DTSU666/DSSU666-Benutzerhandbuch). Hinweis: Victron/Carlo-Gavazzi-Zähler verwenden eine andere, ältere Registerkonvention als Eastron - skalierte Ganzzahlen statt IEEE754-Floats - und der Chint DTSU666 verwendet Modbus-*Holding*-Register (Funktion 03h) statt der *Input*-Register (04h), die jedes andere Modell hier verwendet; beides wird pro Modell automatisch behandelt. Die Registerkarten für SDM120, SDM72Modbus-V2, ET112, ET340, EM540 und DTSU666 wurden noch nicht an echter Hardware getestet - bitte melden, falls eine Abweichung auffällt.
+Eine Custom-Integration für Home Assistant, um mehrere Eastron-SDM230- (einphasig) und/oder SDM630- (dreiphasig) Modbus-Energiezähler direkt über RS485 auszulesen, ohne Cloud-Abhängigkeit. Aufgebaut auf [tmodbus](https://github.com/wlcrs/tmodbus), derselben modernen, asynchronen Modbus-Bibliothek, die auch Home Assistants eigene "Modernizing Modbus"-Architektur (Release 2026.9) verwendet. Registeradressen und Datentypen stammen direkt aus den offiziellen Protokolldokumenten jedes Herstellers: Eastron (SDM230Modbus V1.4, SDM630Modbus V1.8, SDM120-Modbus-Protokoll, SDM72DM-V2-Benutzerhandbuch V1.1). Die Registerkarten für SDM120 und SDM72Modbus-V2 wurden noch nicht an echter Hardware getestet - bitte melden, falls eine Abweichung auffällt.
 
 ## Was dies tut/nicht tut
 
@@ -34,7 +36,7 @@ Eine Custom-Integration für Home Assistant, um mehrere Eastron-SDM230- (einphas
 
 1. Kopieren Sie den Ordner `custom_components/eastron_sdm` nach `<Ihre HA-Konfiguration>/custom_components/eastron_sdm` (via Samba, SSH oder das Add-on Studio Code Server). Alternativ: Fügen Sie das Repository als "Custom repository" in HACS hinzu (Kategorie Integration).
 2. Starten Sie Home Assistant neu.
-3. Einstellungen -> Geräte & Dienste -> Integration hinzufügen -> nach "Eastron", "Victron" oder "Chint" suchen (eine Integration, gelistet als "Eastron / Victron / Chint Energy Meters").
+3. Einstellungen -> Geräte & Dienste -> Integration hinzufügen -> nach "Eastron" suchen (gelistet als "Eastron Modbus meters").
 4. Durchlaufen Sie den Ablauf unten - Sie konfigurieren das Gateway/den RS485-Bus einmal und fügen danach im selben Assistenten so viele Zähler hinzu, wie Sie an diesem Bus haben.
 
 ## Den Konfigurationsablauf durchlaufen
@@ -49,7 +51,7 @@ Eine Custom-Integration für Home Assistant, um mehrere Eastron-SDM230- (einphas
 
 Bei beiden Varianten finden Sie hier auch **"Pause zwischen Anfragen (ms)"** - eine minimale Stille, die nach jeder Modbus-Antwort eingefügt wird, bevor die nächste Anfrage gesendet wird. Standard 30ms für serielle/RTU-over-TCP-Verbindungen und 20ms für ein natives Modbus-TCP-Gateway. `tmodbus` selbst verwendet standardmäßig 0ms; manche günstigen RS485-Gateways brauchen nach einer Antwort einen Moment und reagieren ohne Pause mit Timeouts oder fehlerhaften Messwerten. Sehen Sie dieses Verhalten, erhöhen Sie diesen Wert (z. B. 50-100ms); bei einem stabilen Bus können Sie ihn dagegen verringern für schnelleres Abfragen. Eine Anpassung ist nachträglich über **Rekonfigurieren** möglich, ohne die Zähler zu verlieren.
 
-**Schritt 3 - erster Zähler.** Name, Modell (Eastron SDM230/SDM630/SDM120/SDM72Modbus V2, Victron ET112/ET340/EM540 oder Chint DTSU666) und die Modbus-Adresse (Unit ID / Slave ID, 1-247 - jeder Zähler am Bus muss eine eindeutige Adresse haben).
+**Schritt 3 - erster Zähler.** Name, Modell (Eastron SDM230, SDM630, SDM120 oder SDM72Modbus V2) und die Modbus-Adresse (Unit ID / Slave ID, 1-247 - jeder Zähler am Bus muss eine eindeutige Adresse haben).
 
 **Schritt 4 - weiterer Zähler oder abschließen.** Nach jedem Zähler erhalten Sie die Auswahl "Weiteren Zähler hinzufügen" oder "Einrichtung abschließen".
 
@@ -64,7 +66,7 @@ Ein Konfigurationseintrag = eine Gateway-/RS485-Verbindung. Jeder Zähler an die
 ## Bekannte Einschränkungen / selbst zu prüfende Punkte
 
 - Diese Integration läuft live gegen echte SDM230/SDM630-Zähler über ein RS485-auf-TCP-Gateway (6 Zähler an einem Bus) - getestet einschließlich Langzeitstabilität, Durchsatz des gemeinsamen Busses bei kurzen Abfrageintervallen und dem Aktivieren/Deaktivieren von Entitäten. Testen Sie bei einer neuen Installation dennoch zuerst mit einem einzelnen Zähler, bevor Sie die übrigen hinzufügen, und schauen Sie in Einstellungen -> System -> Protokolle, falls etwas nicht sofort funktioniert.
-- Bisher wurden nur der Eastron SDM230 und SDM630 an echter Hardware getestet. Die Registerkarten für SDM120, SDM72Modbus V2, Victron ET112/ET340/EM540 und Chint DTSU666 sind neu und beruhen ausschließlich auf den Protokolldokumenten der Hersteller, noch nicht gegen echte Hardware verifiziert - sie sind in dieser stabilen Version enthalten, gelten aber als **ungeprüft**. Prüfen Sie die ersten Messwerte gegen die Anzeige des Zählers selbst, bevor Sie sich für irgendetwas Automatisiertes (z. B. Einspeisebegrenzung) darauf verlassen, und melden Sie einen falschen Wert (mit Register-/Sensornamen), damit die Karte korrigiert werden kann. Nur die Karten für SDM230 und SDM630 haben Stunden auf echter Hardware hinter sich.
+- Bisher wurden nur der Eastron SDM230 und SDM630 an echter Hardware getestet. Die Registerkarten für SDM120 und SDM72Modbus V2 sind neu und beruhen ausschließlich auf den Protokolldokumenten der Hersteller, noch nicht gegen echte Hardware verifiziert - sie sind in dieser stabilen Version enthalten, gelten aber als **ungeprüft**. Prüfen Sie die ersten Messwerte gegen die Anzeige des Zählers selbst, bevor Sie sich für irgendetwas Automatisiertes (z. B. Einspeisebegrenzung) darauf verlassen, und melden Sie einen falschen Wert (mit Register-/Sensornamen), damit die Karte korrigiert werden kann. Nur die Karten für SDM230 und SDM630 haben Stunden auf echter Hardware hinter sich.
 - `tmodbus` erfordert Python 3.12+; aktuelle Home-Assistant-Core-Versionen erfüllen dies.
 - Einige Entitäten (Phasenwinkel, THD%, Demand/Energie pro Phase beim SDM630) sind standardmäßig deaktiviert, um die Entitätenliste überschaubar zu halten - aktivieren Sie sie über Einstellungen -> Entitäten, wenn Sie sie benötigen.
 - Das Abfrageintervall ist pro Zähler einstellbar (1-3600s). Empfehlung: Belassen Sie es für normale Überwachung beim Standard (30s). Verringern Sie es nur für eine Nulleinspeisungs- oder Lastausgleichs-Anwendung; bedenken Sie, dass alle Anfragen seriell über eine einzige Sperre laufen, sodass ein schnellerer Zähler mehr Verkehr für alle an diesem Bus bedeutet. Gehen Sie nicht viel unter 3 Sekunden.

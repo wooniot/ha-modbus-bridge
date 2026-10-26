@@ -1,5 +1,5 @@
 {
-  "name": "Eastron / Victron / Chint Energy Meters",
+  "name": "Eastron Modbus meters",
   "homeassistant": "2026.1.0",
   "render_readme": true
 }

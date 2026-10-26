@@ -1,6 +1,6 @@
 {
   "domain": "eastron_sdm",
-  "name": "Eastron / Victron / Chint Energy Meters",
+  "name": "Eastron Modbus meters",
   "codeowners": [
     "@wooniot",
     "@rvdgaag"
@@ -13,5 +13,5 @@
   "requirements": [
     "tmodbus==0.6.2"
   ],
-  "version": "1.0.6"
+  "version": "1.1.0b1"
 }

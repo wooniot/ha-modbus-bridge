@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Eastron / Victron / Chint Gateway",
+        "title": "Eastron Modbus meters Gateway",
         "description": "Wie ist dieser RS485-Bus von Home Assistant aus erreichbar? Die einzelnen Zähler an diesem Bus fügen Sie im nächsten Schritt hinzu.",
         "data": {
           "connection_type": "Verbindungstyp"
@@ -77,11 +77,7 @@
         "sdm230": "Eastron SDM230 (einphasig)",
         "sdm630": "Eastron SDM630 (dreiphasig)",
         "sdm120": "Eastron SDM120 (einphasig, kompakt)",
-        "sdm72v2": "Eastron SDM72Modbus V2 (dreiphasig, kompakt)",
-        "et112": "Victron ET112 (einphasig)",
-        "et340": "Victron ET340 (dreiphasig)",
-        "em540": "Victron EM540 (dreiphasig)",
-        "dtsu666": "Chint DTSU666 (dreiphasig)"
+        "sdm72v2": "Eastron SDM72Modbus V2 (dreiphasig, kompakt)"
       }
     }
   },
