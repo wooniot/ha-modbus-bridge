@@ -297,4 +297,26 @@ class EastronCoordinator(DataUpdateCoordinator[dict[str, float]]):
             # and leaves _last_own_success untouched, so a sustained
             # slowdown eventually trips the watchdog on a later poll.)
             self._last_own_success = time.monotonic()
+        # Diagnostic (DEBUG only, so no noise for ordinary users): one line
+        # per successful poll, naming the unit and *which* keys this poll
+        # actually returned. This pins down the reported "silent power
+        # freeze" decisively, because every register of one meter is
+        # decoded into this single dict and handed to all its sensors in
+        # one notification - power and voltage cannot diverge downstream of
+        # here. So when a power sensor freezes on its last value while its
+        # own voltage/frequency keep advancing:
+        #   * if this line keeps appearing for the unit WITH the power keys
+        #     present -> the coordinator is healthy and still polling; the
+        #     freeze is downstream (recorder/statistics/template/energy, or
+        #     whatever is reading last_reported), not in this integration;
+        #   * if this line STOPS for one unit while other units keep logging
+        #     -> that coordinator's scheduler really did stop (the original
+        #     hypothesis), and we look at HA's coordinator scheduling;
+        #   * if the line keeps appearing but the power keys are MISSING
+        #     from it -> decode/selection dropped them (the register map or
+        #     _active_registers), not a freeze.
+        _LOGGER.debug(
+            "Eastron SDM unit %s (%s): poll ok, %d block(s), %d value(s): %s",
+            self.unit_id, self.subentry.title, len(self.blocks), len(data), sorted(data),
+        )
         return data
