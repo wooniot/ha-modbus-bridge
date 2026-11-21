@@ -76,6 +76,12 @@ MODEL_EM540 = "em540"
 # than *input* registers (function 04h) - see HOLDING_REGISTER_MODELS
 # below and registers.py.
 MODEL_DTSU666 = "dtsu666"
+# ZM194-DAY (Zhejiang Zhangming Electrical) - three-phase multifunction
+# meter with an RS-485 Modbus-RTU interface. Like the Chint DTSU666 its
+# registers are *holding* registers (function 03h), but values are plain
+# scaled 32-bit integers (coefficient 0.001 or 1), not IEEE754 floats -
+# see registers.py.
+MODEL_ZM194 = "zm194"
 MODELS = [
     MODEL_SDM230,
     MODEL_SDM630,
@@ -85,6 +91,7 @@ MODELS = [
     MODEL_ET340,
     MODEL_EM540,
     MODEL_DTSU666,
+    MODEL_ZM194,
 ]
 
 # Manufacturer shown on each meter's Device page, keyed by model - used
@@ -94,12 +101,13 @@ MANUFACTURERS = {
     MODEL_ET340: "Victron Energy",
     MODEL_EM540: "Victron Energy",
     MODEL_DTSU666: "Chint",
+    MODEL_ZM194: "Zhangming",
 }
 
 # Models whose registers must be read with Modbus function 03h ("read
 # holding registers") instead of the 04h ("read input registers") used
 # by every other supported model - see coordinator.py.
-HOLDING_REGISTER_MODELS = {MODEL_DTSU666}
+HOLDING_REGISTER_MODELS = {MODEL_DTSU666, MODEL_ZM194}
 
 # --- Subentries ------------------------------------------------------
 # Each physical meter on the bus is a subentry of type "meter" under

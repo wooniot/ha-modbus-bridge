@@ -82,6 +82,7 @@ from .const import (
     MODEL_SDM230,
     MODEL_SDM630,
     MODEL_SDM72V2,
+    MODEL_ZM194,
 )
 
 MEASUREMENT = SensorStateClass.MEASUREMENT
@@ -112,6 +113,11 @@ class RegisterDefinition:
     # Number of 16-bit registers this parameter occupies, derived from
     # value_type in __post_init__ (float32/int32 = 2, int16 = 1).
     count: int = field(init=False, default=0)
+    # Decimal places HA suggests for displaying this sensor (overrides
+    # the integration-wide default of 2); None keeps the default. Used
+    # for integer-valued registers (e.g. ZM194 whole-kWh energies) to
+    # suppress meaningless trailing ".00".
+    display_precision: int | None = None
 
     def __post_init__(self) -> None:
         counts = {"float32": 2, "int16": 1, "int32": 2}
@@ -121,6 +127,7 @@ class RegisterDefinition:
 def _v(
     key: str, address: int, name: str, enabled: bool = True,
     *, value_type: str = "float32", scale: float = 1.0,
+    display_precision: int | None = None,
 ) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
@@ -130,12 +137,14 @@ def _v(
         entity_registry_enabled_default=enabled,
         value_type=value_type,
         scale=scale,
+        display_precision=display_precision,
     )
 
 
 def _a(
     key: str, address: int, name: str, enabled: bool = True,
     *, value_type: str = "float32", scale: float = 1.0,
+    display_precision: int | None = None,
 ) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
@@ -145,12 +154,14 @@ def _a(
         entity_registry_enabled_default=enabled,
         value_type=value_type,
         scale=scale,
+        display_precision=display_precision,
     )
 
 
 def _w(
     key: str, address: int, name: str, enabled: bool = True,
     *, value_type: str = "float32", scale: float = 1.0,
+    display_precision: int | None = None,
 ) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
@@ -160,12 +171,14 @@ def _w(
         entity_registry_enabled_default=enabled,
         value_type=value_type,
         scale=scale,
+        display_precision=display_precision,
     )
 
 
 def _va(
     key: str, address: int, name: str, enabled: bool = True,
     *, value_type: str = "float32", scale: float = 1.0,
+    display_precision: int | None = None,
 ) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
@@ -175,12 +188,14 @@ def _va(
         entity_registry_enabled_default=enabled,
         value_type=value_type,
         scale=scale,
+        display_precision=display_precision,
     )
 
 
 def _var(
     key: str, address: int, name: str, enabled: bool = True,
     *, value_type: str = "float32", scale: float = 1.0,
+    display_precision: int | None = None,
 ) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
@@ -190,12 +205,14 @@ def _var(
         entity_registry_enabled_default=enabled,
         value_type=value_type,
         scale=scale,
+        display_precision=display_precision,
     )
 
 
 def _pf(
     key: str, address: int, name: str, enabled: bool = True,
     *, value_type: str = "float32", scale: float = 1.0,
+    display_precision: int | None = None,
 ) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
@@ -205,6 +222,7 @@ def _pf(
         entity_registry_enabled_default=enabled,
         value_type=value_type,
         scale=scale,
+        display_precision=display_precision,
     )
 
 
@@ -219,7 +237,8 @@ def _deg(key: str, address: int, name: str) -> RegisterDefinition:
 
 
 def _hz(
-    key: str, address: int, name: str, *, value_type: str = "float32", scale: float = 1.0
+    key: str, address: int, name: str, *, value_type: str = "float32", scale: float = 1.0,
+    display_precision: int | None = None,
 ) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
@@ -228,12 +247,14 @@ def _hz(
         state_class=MEASUREMENT,
         value_type=value_type,
         scale=scale,
+        display_precision=display_precision,
     )
 
 
 def _kwh(
     key: str, address: int, name: str, resettable: bool = False, enabled: bool = True,
     *, value_type: str = "float32", scale: float = 1.0,
+    display_precision: int | None = None,
 ) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
@@ -243,12 +264,14 @@ def _kwh(
         entity_registry_enabled_default=enabled,
         value_type=value_type,
         scale=scale,
+        display_precision=display_precision,
     )
 
 
 def _kvarh(
     key: str, address: int, name: str, resettable: bool = False, enabled: bool = True,
     *, value_type: str = "float32", scale: float = 1.0,
+    display_precision: int | None = None,
 ) -> RegisterDefinition:
     return RegisterDefinition(
         key, address, name,
@@ -258,6 +281,7 @@ def _kvarh(
         entity_registry_enabled_default=enabled,
         value_type=value_type,
         scale=scale,
+        display_precision=display_precision,
     )
 
 
@@ -599,6 +623,56 @@ DTSU666_REGISTERS: list[RegisterDefinition] = [
     _kwh("net_export_active_energy", 0x1030, "Net export active energy", enabled=False),
 ]
 
+# --------------------------------------------------------------------------
+# ZM194-DAY (Zhejiang Zhangming Electrical) - three-phase multifunction
+# meter. Modbus-RTU, *holding* registers read with function 03h (like the
+# Chint DTSU666), but every value is a plain big-endian signed 32-bit
+# integer multiplied by the register's documented coefficient: 0.001 for
+# voltages/currents/power factor/frequency and 1 for powers and energies
+# (energies are whole kWh/kvarh - the register truncates the display's
+# fractional part, e.g. display 1.315 kWh reads back as 1). Register addresses are the documented
+# ones used verbatim (0x0000-0x0042 measurement block). Negative readings
+# (e.g. export power) are sign-extended by decode_int(); the manual's
+# troubleshooting section confirms active power goes negative on reverse
+# energy flow. Not yet tested against real hardware (2026-11-21).
+# Source: ZM194 user manual (RU), section 5 "Протокол связи", register
+# map rows 1-34.
+# --------------------------------------------------------------------------
+ZM194_REGISTERS: list[RegisterDefinition] = [
+    _v("l1_voltage", 0x0000, "L1 voltage", value_type="int32", scale=1000),
+    _v("l2_voltage", 0x0002, "L2 voltage", value_type="int32", scale=1000),
+    _v("l3_voltage", 0x0004, "L3 voltage", value_type="int32", scale=1000),
+    _v("l1l2_voltage", 0x0006, "L1-L2 voltage", enabled=False, value_type="int32", scale=1000),
+    _v("l2l3_voltage", 0x0008, "L2-L3 voltage", enabled=False, value_type="int32", scale=1000),
+    _v("l3l1_voltage", 0x000A, "L3-L1 voltage", enabled=False, value_type="int32", scale=1000),
+    _a("l1_current", 0x000C, "L1 current", value_type="int32", scale=1000),
+    _a("l2_current", 0x000E, "L2 current", value_type="int32", scale=1000),
+    _a("l3_current", 0x0010, "L3 current", value_type="int32", scale=1000),
+    _w("l1_power", 0x0012, "L1 power", value_type="int32", display_precision=0),
+    _w("l2_power", 0x0014, "L2 power", value_type="int32", display_precision=0),
+    _w("l3_power", 0x0016, "L3 power", value_type="int32", display_precision=0),
+    _w("total_power", 0x0018, "Total power", value_type="int32", display_precision=0),
+    _var("l1_reactive_power", 0x001A, "L1 reactive power", enabled=False, value_type="int32"),
+    _var("l2_reactive_power", 0x001C, "L2 reactive power", enabled=False, value_type="int32"),
+    _var("l3_reactive_power", 0x001E, "L3 reactive power", enabled=False, value_type="int32"),
+    _var("total_reactive_power", 0x0020, "Total reactive power", enabled=False, value_type="int32"),
+    _pf("l1_power_factor", 0x0022, "L1 power factor", enabled=False, value_type="int32", scale=1000),
+    _pf("l2_power_factor", 0x0024, "L2 power factor", enabled=False, value_type="int32", scale=1000),
+    _pf("l3_power_factor", 0x0026, "L3 power factor", enabled=False, value_type="int32", scale=1000),
+    _pf("power_factor", 0x0028, "Power factor", value_type="int32", scale=1000),
+    _va("l1_apparent_power", 0x002A, "L1 apparent power", enabled=False, value_type="int32"),
+    _va("l2_apparent_power", 0x002C, "L2 apparent power", enabled=False, value_type="int32"),
+    _va("l3_apparent_power", 0x002E, "L3 apparent power", enabled=False, value_type="int32"),
+    _va("total_apparent_power", 0x0030, "Total apparent power", enabled=False, value_type="int32"),
+    _hz("frequency", 0x0032, "Frequency", value_type="int32", scale=1000),
+    _kwh("total_active_energy", 0x0038, "Total active energy", value_type="int32", display_precision=0),
+    _kwh("import_active_energy", 0x003A, "Import active energy", value_type="int32", display_precision=0),
+    _kwh("export_active_energy", 0x003C, "Export active energy", value_type="int32", display_precision=0),
+    _kvarh("total_reactive_energy", 0x003E, "Total reactive energy", enabled=False, value_type="int32", display_precision=0),
+    _kvarh("import_reactive_energy", 0x0040, "Import reactive energy", enabled=False, value_type="int32", display_precision=0),
+    _kvarh("export_reactive_energy", 0x0042, "Export reactive energy", enabled=False, value_type="int32", display_precision=0),
+]
+
 REGISTER_MAP: dict[str, list[RegisterDefinition]] = {
     MODEL_SDM230: SDM230_REGISTERS,
     MODEL_SDM630: SDM630_REGISTERS,
@@ -608,6 +682,7 @@ REGISTER_MAP: dict[str, list[RegisterDefinition]] = {
     MODEL_ET340: ET340_REGISTERS,
     MODEL_EM540: EM540_REGISTERS,
     MODEL_DTSU666: DTSU666_REGISTERS,
+    MODEL_ZM194: ZM194_REGISTERS,
 }
 
 

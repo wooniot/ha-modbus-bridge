@@ -81,7 +81,8 @@
         "et112": "Victron ET112 (single-phase)",
         "et340": "Victron ET340 (three-phase)",
         "em540": "Victron EM540 (three-phase)",
-        "dtsu666": "Chint DTSU666 (three-phase)"
+        "dtsu666": "Chint DTSU666 (three-phase)",
+        "zm194": "Zhangming ZM194-DAY (three-phase)"
       }
     }
   },
