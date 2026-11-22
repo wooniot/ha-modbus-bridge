@@ -1,7 +1,6 @@
 # ZM194-DAY Multifunction Digital Network Meter — User Manual (English translation)
 
-*Translated from the original Russian manufacturer's manual ("Руководство по
-эксплуатации", Zhejiang Zhangming Electrical Co., Ltd.). Product standard:
+*Translated from the original China manufacturer's manual (Zhejiang Zhangming Electrical Co., Ltd.). Product standard:
 GB/T 22264.7-2008. Machine-assisted translation reviewed against the source.*
 
 | Front panel | Terminal layout |
