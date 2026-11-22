@@ -101,6 +101,27 @@ if reg:
     except Exception as e:
         print("te korte lezing geeft netjes:", type(e).__name__)
 
+# ZM194: voorbeeld uit de handleiding - ruw 0x00035B30 = 219952, ×0.001 = 219.952 V
+if "zm194" in registers.REGISTER_MAP:
+    r = [x for x in registers.REGISTER_MAP["zm194"] if x.key == "l1_voltage"][0]
+    uit = registers.decode_register([0x0003, 0x5B30], 0, r)
+    print("decode zm194 l1_voltage 0x00035B30 ->", uit)
+    if abs(uit - 219.952) > 0.001:
+        fouten.append(f"zm194 voltage-decode gaf {uit} i.p.v. 219.952")
+    # negatief (int32 tekenuitbreiding): 0xFFFFFFFE -> -0.002
+    uit = registers.decode_register([0xFFFF, 0xFFFE], 0, r)
+    print("decode zm194 l1_voltage 0xFFFFFFFE ->", uit)
+    if abs(uit + 0.002) > 0.001:
+        fouten.append(f"zm194 negatieve decode gaf {uit} i.p.v. -0.002")
+    e = [x for x in registers.REGISTER_MAP["zm194"] if x.key == "total_active_energy"][0]
+    if "kilo" not in str(e.unit).lower():
+        fouten.append(f"zm194 energie-eenheid is {e.unit!r}, verwacht kWh")
+    # energie-registers bevatten hele kWh: ruw 1 -> 1.0 kWh (scherm: 1.315 kWh)
+    got = registers.decode_register([0x0000, 0x0001], 0, e)
+    print("decode zm194 total_active_energy 1 ->", got)
+    if abs(got - 1.0) > 1e-9:
+        fouten.append(f"zm194 energie-decode gaf {got} i.p.v. 1.0")
+
 print()
 print("FOUTEN:" if fouten else "geen fouten", *fouten, sep="\n  " if fouten else "")
 sys.exit(1 if fouten else 0)

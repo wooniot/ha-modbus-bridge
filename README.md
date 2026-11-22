@@ -1,12 +1,12 @@
-# Eastron / Victron / Chint Energy Meters
+# Eastron / Victron / Chint / Zhangming Energy Meters
 
 **English** | [Nederlands](README.nl.md) | [Deutsch](README.de.md)
 
-> Home Assistant custom integration for Eastron SDM230/SDM630/SDM120/SDM72Modbus-V2, Victron ET112/ET340/EM540 and Chint DTSU666 energy meters over Modbus (TCP, RTU-over-TCP, or local serial), with per-meter polling intervals for dashboards or fast zero-export/load-balancing use.
+> Home Assistant custom integration for Eastron SDM230/SDM630/SDM120/SDM72Modbus-V2, Victron ET112/ET340/EM540, Chint DTSU666 and Zhangming ZM194-DAY energy meters over Modbus (TCP, RTU-over-TCP, or local serial), with per-meter polling intervals for dashboards or fast zero-export/load-balancing use.
 
 ## What it does
 
-This is a custom Home Assistant integration for Eastron SDM230/SDM630/SDM120/SDM72Modbus-V2, Victron ET112/ET340/EM540 and Chint DTSU666 Modbus energy meters (single- and three-phase). It talks to your meter(s) over the Modbus protocol and exposes every reading as a native Home Assistant sensor - voltage, current, active/apparent/reactive power, power factor, frequency, import/export energy, THD% (Eastron), and more - with the right device class, unit and long-term statistics support out of the box. Different meters on the same bus can mix and match freely - e.g. an Eastron SDM630 next to a Victron ET340.
+This is a custom Home Assistant integration for Eastron SDM230/SDM630/SDM120/SDM72Modbus-V2, Victron ET112/ET340/EM540, Chint DTSU666 and Zhangming ZM194-DAY Modbus energy meters (single- and three-phase). It talks to your meter(s) over the Modbus protocol and exposes every reading as a native Home Assistant sensor - voltage, current, active/apparent/reactive power, power factor, frequency, import/export energy, THD% (Eastron), and more - with the right device class, unit and long-term statistics support out of the box. Different meters on the same bus can mix and match freely - e.g. an Eastron SDM630 next to a Victron ET340.
 
 ## What it offers
 
@@ -21,7 +21,7 @@ This is a custom Home Assistant integration for Eastron SDM230/SDM630/SDM120/SDM
 
 ---
 
-A custom Home Assistant integration to read multiple Eastron SDM230 (single-phase) and/or SDM630 (three-phase) Modbus energy meters directly over RS485, with no cloud dependency. Built on [tmodbus](https://github.com/wlcrs/tmodbus), the same modern, async Modbus library used by Home Assistant's own "Modernizing Modbus" architecture (release 2026.9). Register addresses and data types come directly from the official protocol documents of each manufacturer: Eastron (SDM230Modbus V1.4, SDM630Modbus V1.8, SDM120-Modbus protocol, SDM72DM-V2 user manual V1.1), Carlo Gavazzi/Victron (EM111, EM330/EM340, EM530/EM540 communication protocols - the underlying hardware behind the Victron-branded ET112/ET340/EM540), and Chint (DTSU666/DSSU666 user manual). Note that Victron/Carlo Gavazzi meters use a different, older register convention than Eastron - plain scaled integers instead of IEEE754 floats - and the Chint DTSU666 uses Modbus *holding* registers (function 03h) rather than the *input* registers (04h) every other model here uses; both are handled transparently per model. The SDM120, SDM72Modbus-V2, ET112, ET340, EM540 and DTSU666 register maps have not yet been tested against real hardware - please report back if you spot a mismatch.
+A custom Home Assistant integration to read multiple Eastron SDM230 (single-phase) and/or SDM630 (three-phase) Modbus energy meters directly over RS485, with no cloud dependency. Built on [tmodbus](https://github.com/wlcrs/tmodbus), the same modern, async Modbus library used by Home Assistant's own "Modernizing Modbus" architecture (release 2026.9). Register addresses and data types come directly from the official protocol documents of each manufacturer: Eastron (SDM230Modbus V1.4, SDM630Modbus V1.8, SDM120-Modbus protocol, SDM72DM-V2 user manual V1.1), Carlo Gavazzi/Victron (EM111, EM330/EM340, EM530/EM540 communication protocols - the underlying hardware behind the Victron-branded ET112/ET340/EM540), and Chint (DTSU666/DSSU666 user manual), and Zhangming (ZM194-DAY user manual - English translation in [docs/ZM194-DAY-manual-en.md](docs/ZM194-DAY-manual-en.md)). Note that Victron/Carlo Gavazzi meters use a different, older register convention than Eastron - plain scaled integers instead of IEEE754 floats - and the Chint DTSU666 uses Modbus *holding* registers (function 03h) rather than the *input* registers (04h) every other model here uses; both are handled transparently per model. The SDM120, SDM72Modbus-V2, ET112, ET340, EM540 and DTSU666 register maps have not yet been tested against real hardware (the Zhangming ZM194-DAY map has been verified against real hardware, 2026-11) - please report back if you spot a mismatch.
 
 ## What this does and does not do
 
@@ -34,7 +34,7 @@ A custom Home Assistant integration to read multiple Eastron SDM230 (single-phas
 
 1. Copy the folder `custom_components/eastron_sdm` to `<your HA config>/custom_components/eastron_sdm` (via Samba, SSH, or the Studio Code Server add-on). Alternatively: add the repo as a "Custom repository" in HACS (category Integration).
 2. Restart Home Assistant.
-3. Settings -> Devices & Services -> Add Integration -> search for "Eastron", "Victron" or "Chint" (all one integration, listed as "Eastron / Victron / Chint Energy Meters").
+3. Settings -> Devices & Services -> Add Integration -> search for "Eastron", "Victron", "Chint" or "Zhangming" (all one integration, listed as "Eastron / Victron / Chint Energy Meters").
 4. Work through the flow below - you configure the gateway/RS485 bus once, and then add as many meters as you have on that bus within the same wizard.
 
 ## Working through the config flow
@@ -49,7 +49,7 @@ A custom Home Assistant integration to read multiple Eastron SDM230 (single-phas
 
 In both variants you'll also find **"Pause between requests (ms)"** here - a minimum period of silence inserted after each Modbus response before the next request is sent. Default 30ms for serial/RTU-over-TCP connections and 20ms for a native Modbus TCP gateway. `tmodbus` itself defaults to 0ms; some cheap RS485 gateways need a moment after a response and, without a pause, react with timeouts or corrupt readings. If you see that behaviour, raise this value (e.g. 50-100ms); on a stable bus you can instead lower it for faster polling. It can be changed afterwards via **Reconfigure** without losing the meters.
 
-**Step 3 - first meter.** Name, model (Eastron SDM230/SDM630/SDM120/SDM72Modbus V2, Victron ET112/ET340/EM540, or Chint DTSU666), and the Modbus address (unit ID / slave ID, 1-247 - every meter on the bus must have a unique address).
+**Step 3 - first meter.** Name, model (Eastron SDM230/SDM630/SDM120/SDM72Modbus V2, Victron ET112/ET340/EM540, Chint DTSU666, or Zhangming ZM194-DAY), and the Modbus address (unit ID / slave ID, 1-247 - every meter on the bus must have a unique address).
 
 **Step 4 - another meter, or finish.** After each meter you get the choice "Add another meter" or "Finish setup".
 

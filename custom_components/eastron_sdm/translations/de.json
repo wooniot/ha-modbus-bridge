@@ -81,7 +81,8 @@
         "et112": "Victron ET112 (einphasig)",
         "et340": "Victron ET340 (dreiphasig)",
         "em540": "Victron EM540 (dreiphasig)",
-        "dtsu666": "Chint DTSU666 (dreiphasig)"
+        "dtsu666": "Chint DTSU666 (dreiphasig)",
+        "zm194": "Zhangming ZM194-DAY (dreiphasig)"
       }
     }
   },

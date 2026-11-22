@@ -51,6 +51,8 @@ class EastronSdmSensor(CoordinatorEntity[EastronCoordinator], SensorEntity):
         self._attr_state_class = register.state_class
         self._attr_icon = register.icon
         self._attr_entity_registry_enabled_default = register.entity_registry_enabled_default
+        if register.display_precision is not None:
+            self._attr_suggested_display_precision = register.display_precision
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, subentry.subentry_id)},
