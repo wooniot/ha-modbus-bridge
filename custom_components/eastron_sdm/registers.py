@@ -634,9 +634,16 @@ DTSU666_REGISTERS: list[RegisterDefinition] = [
 # ones used verbatim (0x0000-0x0042 measurement block). Negative readings
 # (e.g. export power) are sign-extended by decode_int(); the manual's
 # troubleshooting section confirms active power goes negative on reverse
-# energy flow. Not yet tested against real hardware (2026-11-21).
-# Source: ZM194 user manual (RU), section 5 "Протокол связи", register
-# map rows 1-34.
+# energy flow. Verified against real hardware (2026-11-22): voltages,
+# currents, per-phase/total power, PF and frequency all match the meter
+# display through an RS-485-to-TCP gateway. Field notes:
+# - the meter only supports function 03h (04h answers exception 0x0B);
+# - changing the CT ratio (register 0x0047 / menu InPr>ICt) resets the
+#   Modbus energy counters, while the display's energy registers keep
+#   their accumulated value - the two then differ by a constant offset
+#   but increment identically.
+# Source: ZM194 user manual (RU), section 5, register map rows 1-34;
+# English translation: docs/ZM194-DAY-manual-en.md.
 # --------------------------------------------------------------------------
 ZM194_REGISTERS: list[RegisterDefinition] = [
     _v("l1_voltage", 0x0000, "L1 voltage", value_type="int32", scale=1000),
